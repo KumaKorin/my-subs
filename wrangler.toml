@@ -1,0 +1,26 @@
+name = "my-subs"
+main = "src/worker.js"
+compatibility_date = "2024-01-01"
+
+# KV 命名空间绑定 (放在 table array 之前，或者使用 [[kv_namespaces]])
+[[kv_namespaces]]
+binding = "SUBS_KV"
+id = "kvId"
+
+# 允许将前端客户端文件与 YAML 默认模板作为 Text 纯文本模块导入
+[[rules]]
+type = "Text"
+globs = ["**/*.html", "**/*.css", "**/*.client.js", "**/*.yaml"]
+fallthrough = true
+
+# 环境变量说明：
+# 生产环境推荐：
+#   npx wrangler secret put ADMIN_TOKEN
+#   npx wrangler secret put APP_SECRET
+#   npx wrangler secret put SECURE_ENTRANCE (可选，如 /secret_gate)
+#   npx wrangler secret put CDN_HEADER_NAME (可选，自定义 CDN 域名请求头名称)
+[vars]
+# ADMIN_TOKEN = ""
+# APP_SECRET = ""
+# SECURE_ENTRANCE = "/secret_gate"
+# CDN_HEADER_NAME = "x-cdn-request-host"

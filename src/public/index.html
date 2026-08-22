@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clash Subscription Manager</title>
+        <link rel="stylesheet" href="./public/css/style.css" />
+    </head>
+    <body>
+        <!-- 1. 登录面板 (鉴权未通过时显示) -->
+        <div id="login-section" class="auth-container" style="display: none">
+            <div class="auth-card">
+                <h1>🚀 Clash Subs</h1>
+                <p>请输入管理员 Token 登录管理面板</p>
+                <form id="login-form">
+                    <input
+                        type="password"
+                        id="admin-token-input"
+                        class="input-field"
+                        placeholder="ADMIN_TOKEN"
+                        required
+                        autocomplete="current-password"
+                    />
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem">登 录</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 2. 主控制台 (鉴权通过后显示) -->
+        <div id="app-section" class="app-container" style="display: none">
+            <header>
+                <div class="logo-area">
+                    <h1>⚡ Clash 订阅分发中心</h1>
+                </div>
+                <div class="btn-group">
+                    <button id="btn-preview-yaml" class="btn btn-secondary">👁 预览最终 YAML</button>
+                    <button id="btn-logout" class="btn btn-danger">退出登录</button>
+                </div>
+            </header>
+
+            <!-- 顶部订阅链接栏 -->
+            <div class="subscription-bar">
+                <div class="sub-info">
+                    <span style="font-weight: 600; white-space: nowrap">分发链接:</span>
+                    <input type="text" id="sub-url-input" class="sub-input" readonly />
+                    <button id="btn-copy-sub" class="btn btn-secondary">复制</button>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center">
+                    <span style="font-size: 0.85rem; color: var(--text-muted); white-space: nowrap">订阅 Token:</span>
+                    <input
+                        type="text"
+                        id="sub-token-input"
+                        class="input-field"
+                        style="margin-bottom: 0; width: 140px; padding: 0.4rem 0.6rem"
+                    />
+                    <button id="btn-update-token" class="btn btn-primary" style="padding: 0.4rem 0.75rem">更新</button>
+                </div>
+            </div>
+
+            <!-- 左右双 Section 布局 -->
+            <div class="main-grid">
+                <!-- Section 1: 可视化 Proxy-Providers 管理 (独立组件挂载) -->
+                <div class="section-card">
+                    <div class="section-header">
+                        <div class="section-title"><span>📦</span> Proxy-Providers</div>
+                        <div style="display: flex; gap: 0.5rem">
+                            <button id="btn-add-provider" class="btn btn-secondary">+ 添加</button>
+                            <button id="btn-save-providers" class="btn btn-primary">💾 加密保存Providers</button>
+                        </div>
+                    </div>
+                    <div
+                        id="providers-container"
+                        style="flex: 1; overflow-y: auto; max-height: 520px; padding-right: 0.25rem"
+                    >
+                        <!-- 独立组件动态注入 -->
+                    </div>
+                </div>
+
+                <!-- Section 2: 基础 Clash YAML 配置 -->
+                <div class="section-card">
+                    <div class="section-header">
+                        <div class="section-title"><span>📝</span> Base Clash YAML (基础规则与组)</div>
+                        <button id="btn-save-yaml" class="btn btn-primary">💾 保存 Base YAML</button>
+                    </div>
+                    <div style="margin-bottom: 0.5rem; font-size: 0.8rem; color: var(--text-muted)">
+                        提示：最终订阅将在头部自动插入左侧配置好的 <code>proxy-providers</code>。
+                    </div>
+                    <textarea
+                        id="base-yaml-textarea"
+                        class="input-field"
+                        placeholder="输入 Clash 基础配置 (rules, proxy-groups 等)..."
+                    ></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. YAML 预览 Modal -->
+        <div id="preview-modal" class="modal-backdrop" style="display: none">
+            <div class="modal-content">
+                <div class="section-header" style="margin-bottom: 0.5rem">
+                    <div class="section-title">📄 最终拼接生成的 Clash YAML 预览</div>
+                    <button id="btn-close-modal" class="btn btn-secondary">关闭</button>
+                </div>
+                <div class="modal-body">
+                    <pre id="preview-content"></pre>
+                </div>
+            </div>
+        </div>
+
+        <script type="module" src="./public/js/app.client.js"></script>
+    </body>
+</html>
