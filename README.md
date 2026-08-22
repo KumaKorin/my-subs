@@ -9,6 +9,7 @@
 1. **可视化双 Section 管理面板**：
     - **Section 1 (Proxy Providers)**：可视化组件，动态添加/修改/删除订阅源。
     - **Section 2 (Base YAML)**：基础规则、策略组配置，最终订阅接口自动将 Providers 注入头部 `proxy-providers:`。
+    - **默认模板**：首次使用（KV 中未保存 Base YAML）时，自动使用 [`src/default-template.yaml`](./src/default-template.yaml) 作为默认模板；在 WebUI 保存后将覆盖该默认值。
 2. **安全与鉴权机制**：
     - **双 Token 鉴权**：`ADMIN_TOKEN` 登录验证，`APP_SECRET` 用于 HMAC 签名 Session 与 AES 加密。
     - **Cookie 校验**：优先校验客户端签名的 `auth_session`，未登录时转到 Admin 登录界面。
