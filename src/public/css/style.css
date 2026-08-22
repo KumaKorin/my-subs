@@ -308,3 +308,71 @@ textarea.input-field {
     z-index: 2000;
     transition: opacity 0.3s ease;
 }
+
+/* GitHub 代理设置卡片 */
+.settings-card {
+    margin-bottom: 1.5rem;
+}
+
+.settings-row {
+    display: flex;
+    gap: 2.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.switch-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.switch-label {
+    font-size: 0.9rem;
+}
+
+.switch-item input[type='checkbox'] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 44px;
+    height: 24px;
+    background: #334155;
+    border-radius: 999px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    outline: none;
+    flex-shrink: 0;
+}
+
+.switch-item input[type='checkbox']::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    background: #f8fafc;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+}
+
+.switch-item input[type='checkbox']:checked {
+    background: var(--primary);
+}
+
+.switch-item input[type='checkbox']:checked::after {
+    transform: translateX(20px);
+}
+
+.settings-hint {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.settings-hint code {
+    color: #38bdf8;
+}

@@ -71,6 +71,13 @@ function renderDashboard(data) {
         })
         providersComp.setProviders(data.providers || [])
     }
+
+    // 4. GitHub 代理设置开关
+    const settings = data.settings || {}
+    const toggleGithub = document.getElementById('toggle-proxy-github')
+    const toggleGithubusercontent = document.getElementById('toggle-proxy-githubusercontent')
+    if (toggleGithub) toggleGithub.checked = !!settings.proxyGithub
+    if (toggleGithubusercontent) toggleGithubusercontent.checked = !!settings.proxyGithubusercontent
 }
 
 // 绑定全局事件
@@ -191,6 +198,32 @@ function bindGlobalEvents() {
                 showToast('订阅链接已复制到剪贴板')
             }
         })
+    }
+
+    // GitHub 代理设置开关 (变更即保存)
+    const toggleGithub = document.getElementById('toggle-proxy-github')
+    const toggleGithubusercontent = document.getElementById('toggle-proxy-githubusercontent')
+    if (toggleGithub && toggleGithubusercontent) {
+        const saveSettingsRequest = async () => {
+            const res = await fetch(apiUrl('/api/config/settings'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    settings: {
+                        proxyGithub: toggleGithub.checked,
+                        proxyGithubusercontent: toggleGithubusercontent.checked
+                    }
+                })
+            })
+            const result = await res.json()
+            if (result.success) {
+                showToast('GitHub 代理设置已保存，重新拉取订阅后生效')
+            } else {
+                showToast(result.error || '保存失败', true)
+            }
+        }
+        toggleGithub.addEventListener('change', saveSettingsRequest)
+        toggleGithubusercontent.addEventListener('change', saveSettingsRequest)
     }
 
     // 预览最终 YAML 弹窗

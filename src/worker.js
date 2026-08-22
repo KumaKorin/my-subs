@@ -6,9 +6,11 @@ import {
     getProviders,
     saveProviders,
     getSubscriptionToken,
-    saveSubscriptionToken
+    saveSubscriptionToken,
+    getSettings,
+    saveSettings
 } from './kv.js'
-import { assembleFinalYaml } from './yaml.js'
+import { assembleFinalYaml, rewriteGithubUrls } from './yaml.js'
 
 // 导入前端静态资源 (作为 Text 纯文本模块导入)
 import HTML_ADMIN from './public/index.html'
@@ -53,6 +55,25 @@ function getPublicOrigin(request, env, url) {
     }
 
     return `${proto}://${host}`
+}
+
+/**
+ * 校验目标 URL 是否为允许代理的 GitHub 域名 (https 且属于 github.com / githubusercontent.com 及其子域)
+ */
+function isAllowedGithubUrl(rawUrl) {
+    try {
+        const u = new URL(rawUrl)
+        if (u.protocol !== 'https:') return false
+        const host = u.hostname.toLowerCase()
+        return (
+            host === 'github.com' ||
+            host.endsWith('.github.com') ||
+            host === 'githubusercontent.com' ||
+            host.endsWith('.githubusercontent.com')
+        )
+    } catch {
+        return false
+    }
 }
 
 export default {
@@ -114,8 +135,17 @@ export default {
 
             const baseYaml = await getBaseYaml(env)
             const providers = await getProviders(env)
+            const settings = await getSettings(env)
             const proxyBaseUrl = `${currentOrigin}${prefix}/provider-proxy?token=${encodeURIComponent(queryToken)}&name=`
-            const finalYaml = assembleFinalYaml(baseYaml, providers, proxyBaseUrl)
+            const ghProxyBaseUrl = `${currentOrigin}${prefix}/gh-proxy?token=${encodeURIComponent(queryToken)}&url=`
+            let finalYaml = assembleFinalYaml(baseYaml, providers, proxyBaseUrl)
+
+            // 根据设置重写 GitHub 相关 URL 为 Worker 代理链接
+            finalYaml = rewriteGithubUrls(finalYaml, {
+                proxyGithub: settings.proxyGithub,
+                proxyGithubusercontent: settings.proxyGithubusercontent,
+                proxyUrlPrefix: ghProxyBaseUrl
+            })
 
             return new Response(finalYaml, {
                 status: 200,
@@ -171,6 +201,49 @@ export default {
                 })
             } catch (err) {
                 return new Response(`Failed to proxy provider: ${err.message}`, { status: 502 })
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 2.1 公开接口：代理拉取 GitHub / GitHubusercontent 资源 (/gh-proxy?token=xxx&url=xxx)
+        // -------------------------------------------------------------
+        if (pathname === '/gh-proxy') {
+            const queryToken = url.searchParams.get('token')
+            const targetUrl = url.searchParams.get('url')
+            if (!queryToken || !targetUrl) {
+                return new Response('Missing token or url parameter', { status: 400 })
+            }
+
+            const currentSubToken = await getSubscriptionToken(env)
+            if (!currentSubToken || !timingSafeEqual(queryToken, currentSubToken)) {
+                return new Response('Invalid subscription token', { status: 403 })
+            }
+
+            if (!isAllowedGithubUrl(targetUrl)) {
+                return new Response('Target url is not allowed', { status: 403 })
+            }
+
+            try {
+                const upstreamRes = await fetch(targetUrl, {
+                    headers: {
+                        'User-Agent': request.headers.get('User-Agent') || 'Clash/1.18.0',
+                        Accept: '*/*'
+                    }
+                })
+
+                const responseHeaders = new Headers(upstreamRes.headers)
+                responseHeaders.set('Access-Control-Allow-Origin', '*')
+                responseHeaders.set('Cache-Control', 'public, max-age=300')
+                if (!responseHeaders.get('Content-Type')) {
+                    responseHeaders.set('Content-Type', 'application/octet-stream')
+                }
+
+                return new Response(upstreamRes.body, {
+                    status: upstreamRes.status,
+                    headers: responseHeaders
+                })
+            } catch (err) {
+                return new Response(`Failed to proxy github resource: ${err.message}`, { status: 502 })
             }
         }
 
@@ -253,6 +326,7 @@ export default {
                 const baseYaml = await getBaseYaml(env)
                 const providers = await getProviders(env)
                 const subToken = await getSubscriptionToken(env)
+                const settings = await getSettings(env)
 
                 return jsonResponse({
                     success: true,
@@ -260,9 +334,20 @@ export default {
                         baseYaml,
                         providers,
                         subToken,
+                        settings,
                         subUrl: `${currentOrigin}${prefix}/sub?token=${subToken}`
                     }
                 })
+            }
+
+            // 保存分发设置 (GitHub 代理开关)
+            if (pathname === '/api/config/settings' && request.method === 'POST') {
+                const { settings } = await request.json()
+                if (!settings || typeof settings !== 'object') {
+                    return jsonResponse({ success: false, error: 'Invalid settings' }, 400)
+                }
+                await saveSettings(settings, env)
+                return jsonResponse({ success: true })
             }
 
             // 保存 Base YAML
@@ -303,8 +388,15 @@ export default {
                 const baseYaml = await getBaseYaml(env)
                 const providers = await getProviders(env)
                 const subToken = await getSubscriptionToken(env)
+                const settings = await getSettings(env)
                 const proxyBaseUrl = `${currentOrigin}${prefix}/provider-proxy?token=${encodeURIComponent(subToken || '')}&name=`
-                const finalYaml = assembleFinalYaml(baseYaml, providers, proxyBaseUrl)
+                const ghProxyBaseUrl = `${currentOrigin}${prefix}/gh-proxy?token=${encodeURIComponent(subToken || '')}&url=`
+                let finalYaml = assembleFinalYaml(baseYaml, providers, proxyBaseUrl)
+                finalYaml = rewriteGithubUrls(finalYaml, {
+                    proxyGithub: settings.proxyGithub,
+                    proxyGithubusercontent: settings.proxyGithubusercontent,
+                    proxyUrlPrefix: ghProxyBaseUrl
+                })
                 return jsonResponse({ success: true, yaml: finalYaml })
             }
 

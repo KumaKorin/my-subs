@@ -4,6 +4,39 @@ import DEFAULT_TEMPLATE from './default-template.yaml'
 const KEY_BASE_YAML = 'data:base_yaml'
 const KEY_PROVIDERS = 'data:providers_encrypted'
 const KEY_SUB_TOKEN = 'data:sub_token_encrypted'
+const KEY_SETTINGS = 'data:settings'
+
+/**
+ * 获取分发设置 (GitHub 代理开关等)
+ * @returns {Promise<{proxyGithub: boolean, proxyGithubusercontent: boolean}>}
+ */
+export async function getSettings(env) {
+    const raw = await env.SUBS_KV.get(KEY_SETTINGS)
+    if (!raw) {
+        return { proxyGithub: false, proxyGithubusercontent: false }
+    }
+    try {
+        const parsed = JSON.parse(raw)
+        return {
+            proxyGithub: !!parsed.proxyGithub,
+            proxyGithubusercontent: !!parsed.proxyGithubusercontent
+        }
+    } catch (err) {
+        console.error('Failed to parse settings:', err)
+        return { proxyGithub: false, proxyGithubusercontent: false }
+    }
+}
+
+/**
+ * 保存分发设置
+ */
+export async function saveSettings(settings, env) {
+    const clean = {
+        proxyGithub: !!settings?.proxyGithub,
+        proxyGithubusercontent: !!settings?.proxyGithubusercontent
+    }
+    await env.SUBS_KV.put(KEY_SETTINGS, JSON.stringify(clean))
+}
 
 /**
  * 获取 Base YAML 基础配置

@@ -65,3 +65,39 @@ export function assembleFinalYaml(baseYaml, providers, proxyBaseUrl = '') {
     // 拼接在头部
     return `${providersYaml}\n\n${cleanBaseYaml}\n`
 }
+
+/**
+ * 将最终 YAML 中的 GitHub / GitHubusercontent 直连 URL 重写为 Worker 代理链接
+ * 仅重写独立出现的 URL (前面是引号或空白)，避免误伤已内嵌在镜像 URL 中的 github 地址 (如 https://ghp.ci/https://github.com/...)
+ *
+ * @param {string} yaml 最终 YAML 文本
+ * @param {{proxyGithub: boolean, proxyGithubusercontent: boolean, proxyUrlPrefix: string}} options
+ */
+export function rewriteGithubUrls(
+    yaml,
+    { proxyGithub = false, proxyGithubusercontent = false, proxyUrlPrefix = '' } = {}
+) {
+    if ((!proxyGithub && !proxyGithubusercontent) || !proxyUrlPrefix) {
+        return yaml
+    }
+
+    return yaml.replace(/(?<=["'\s])(https:\/\/[^\s"'<>]+)/g, match => {
+        let host
+        try {
+            host = new URL(match).hostname.toLowerCase()
+        } catch {
+            return match
+        }
+
+        const isGithubusercontent = host === 'githubusercontent.com' || host.endsWith('.githubusercontent.com')
+        const isGithub = host === 'github.com' || host.endsWith('.github.com')
+
+        if (isGithubusercontent && proxyGithubusercontent) {
+            return `${proxyUrlPrefix}${encodeURIComponent(match)}`
+        }
+        if (isGithub && proxyGithub) {
+            return `${proxyUrlPrefix}${encodeURIComponent(match)}`
+        }
+        return match
+    })
+}

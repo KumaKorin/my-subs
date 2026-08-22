@@ -57,6 +57,27 @@
                 </div>
             </div>
 
+            <!-- GitHub 代理设置 -->
+            <div class="section-card settings-card">
+                <div class="section-header">
+                    <div class="section-title"><span>🔧</span> GitHub 代理设置</div>
+                </div>
+                <div class="settings-row">
+                    <label class="switch-item">
+                        <span class="switch-label">代理 github.com</span>
+                        <input type="checkbox" id="toggle-proxy-github" />
+                    </label>
+                    <label class="switch-item">
+                        <span class="switch-label">代理 githubusercontent.com</span>
+                        <input type="checkbox" id="toggle-proxy-githubusercontent" />
+                    </label>
+                </div>
+                <p class="settings-hint">
+                    开启后，最终分发 YAML 中的 GitHub 直链 URL 将自动重写为通过本 Worker 的
+                    <code>/gh-proxy</code> 接口代理拉取（客户端重新拉取订阅后生效）。
+                </p>
+            </div>
+
             <!-- 左右双 Section 布局 -->
             <div class="main-grid">
                 <!-- Section 1: 可视化 Proxy-Providers 管理 (独立组件挂载) -->
