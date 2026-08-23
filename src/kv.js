@@ -9,7 +9,8 @@ import {
     dbSaveProvidersPool,
     dbGetProfiles,
     dbGetProfileByToken,
-    dbSaveProfiles
+    dbSaveProfiles,
+    migrateKvToD1
 } from './db.js'
 
 // KV 缓存 Key 规范
@@ -20,10 +21,39 @@ const KEY_PROFILE_MAP = 'data:meta:profile:map'
 const PREFIX_PROFILE = 'data:profile:'
 const PREFIX_SUBTOKEN_MAP = 'data:map:subtoken:'
 
+let populatePromise = null
+
 /**
- * 获取全局通用的 Global Base YAML 模板 (KV 缓存 -> D1 主库)
+ * 自动检测：如果 D1 为空且 KV 中存在历史数据，初次请求时自动将所有数据持久化写入 D1
+ */
+async function ensureD1Populated(env) {
+    if (!env.DB || !env.SUBS_KV) return
+    if (!populatePromise) {
+        populatePromise = (async () => {
+            try {
+                const profiles = await dbGetProfiles(env.DB)
+                if (!profiles || profiles.length === 0) {
+                    const kvProfileMap = await env.SUBS_KV.get(KEY_PROFILE_MAP)
+                    if (kvProfileMap) {
+                        console.log('Automatically syncing existing KV data into D1...')
+                        await migrateKvToD1(env)
+                    }
+                }
+            } catch (err) {
+                console.error('ensureD1Populated failed:', err)
+                populatePromise = null
+            }
+        })()
+    }
+    await populatePromise
+}
+
+/**
+ * 获取全局通用的 Global Base YAML 模板 (D1 主库 + KV 边缘缓存)
  */
 export async function getGlobalBaseYaml(env) {
+    await ensureD1Populated(env)
+
     if (env.SUBS_KV) {
         const cached = await env.SUBS_KV.get(KEY_GLOBAL_BASE_YAML)
         if (cached) return cached
@@ -31,13 +61,15 @@ export async function getGlobalBaseYaml(env) {
 
     if (env.DB) {
         const yaml = await dbGetGlobalBaseYaml(env.DB)
-        if (yaml && env.SUBS_KV) {
-            await env.SUBS_KV.put(KEY_GLOBAL_BASE_YAML, yaml)
+        if (yaml) {
+            if (env.SUBS_KV) {
+                await env.SUBS_KV.put(KEY_GLOBAL_BASE_YAML, yaml)
+            }
+            return yaml
         }
-        return yaml || DEFAULT_TEMPLATE
     }
 
-    // 纯 KV 兜底
+    // 兜底
     if (env.SUBS_KV) {
         let yaml = await env.SUBS_KV.get(KEY_GLOBAL_BASE_YAML)
         if (!yaml) {
@@ -67,8 +99,9 @@ export async function saveGlobalBaseYaml(yamlString, env) {
  */
 export async function getProviderById(id, env) {
     if (!id) return null
+    await ensureD1Populated(env)
 
-    // 优先从 KV 缓存获取
+    // 1. 优先从 KV 缓存获取
     if (env.SUBS_KV) {
         const encrypted = await env.SUBS_KV.get(`${PREFIX_PROVIDER_ENCRYPTED}${id}`)
         if (encrypted) {
@@ -83,7 +116,7 @@ export async function getProviderById(id, env) {
         }
     }
 
-    // KV 缓存未命中，从 D1 读取并回填缓存
+    // 2. KV 缓存未命中，从 D1 读取并回填缓存
     if (env.DB) {
         const provider = await dbGetProviderById(env.DB, id, env.APP_SECRET)
         if (provider && env.SUBS_KV) {
@@ -134,6 +167,8 @@ export async function getProvidersByIds(ids, env) {
  * 获取全部 Provider 列表
  */
 export async function getProvidersPool(env) {
+    await ensureD1Populated(env)
+
     if (env.DB) {
         const list = await dbGetProvidersPool(env.DB, env.APP_SECRET)
         if (list && list.length > 0) {
@@ -141,7 +176,6 @@ export async function getProvidersPool(env) {
         }
     }
 
-    // 纯 KV 或 D1 为空时从 KV 读
     if (env.SUBS_KV) {
         const mapRaw = await env.SUBS_KV.get(KEY_PROVIDER_MAP)
         if (mapRaw) {
@@ -165,7 +199,7 @@ export async function getProvidersPool(env) {
 export async function saveProvidersPool(providersArray, env) {
     if (!Array.isArray(providersArray)) return
 
-    // 1. 写入 D1
+    // 1. 写入 D1 主库
     if (env.DB) {
         await dbSaveProvidersPool(env.DB, providersArray, env.APP_SECRET)
     }
@@ -206,6 +240,7 @@ export async function saveProvidersPool(providersArray, env) {
  */
 export async function getProfileById(id, env) {
     if (!id) return null
+    await ensureD1Populated(env)
 
     if (env.SUBS_KV) {
         const raw = await env.SUBS_KV.get(`${PREFIX_PROFILE}${id}`)
@@ -267,6 +302,8 @@ export async function deleteProfile(profile, env) {
  * 获取全部 Profile 列表 (未初始化时自动创建默认 Profile)
  */
 export async function getProfiles(env) {
+    await ensureD1Populated(env)
+
     if (env.DB) {
         const profiles = await dbGetProfiles(env.DB)
         if (profiles && profiles.length > 0) {
@@ -333,7 +370,7 @@ export async function saveProfiles(profilesArray, env) {
         }
     }
 
-    // 2. 写入 D1
+    // 2. 写入 D1 主库
     if (env.DB) {
         await dbSaveProfiles(env.DB, profilesArray)
     }
@@ -377,6 +414,7 @@ export async function saveProfiles(profilesArray, env) {
  */
 export async function getProfileByToken(token, env) {
     if (!token) return null
+    await ensureD1Populated(env)
 
     // 1. 优先通过 KV subtoken 缓存索引极速查找
     if (env.SUBS_KV) {

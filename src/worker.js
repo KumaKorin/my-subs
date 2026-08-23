@@ -17,7 +17,8 @@ import {
     dbClearLogs,
     dbGetStats,
     migrateKvToD1,
-    initD1Tables
+    initD1Tables,
+    dbGetProfiles
 } from './db.js'
 import { assembleFinalYaml, rewriteGithubUrls } from './yaml.js'
 

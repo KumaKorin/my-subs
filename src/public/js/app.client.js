@@ -401,19 +401,23 @@ async function loadLogs() {
 
         tbody.innerHTML = logs
             .map(log => {
-                let typeBadge = `<span class="log-badge log-badge-sub">/sub 分发</span>`
+                let typeBadge = `<span class="log-badge log-badge-sub"><i class="ri-file-download-line"></i> /sub 分发</span>`
                 if (log.request_type === 'provider-proxy') {
-                    typeBadge = `<span class="log-badge log-badge-provider">/provider 代理</span>`
+                    typeBadge = `<span class="log-badge log-badge-provider"><i class="ri-route-line"></i> /provider 代理</span>`
                 } else if (log.request_type === 'gh-proxy') {
-                    typeBadge = `<span class="log-badge log-badge-gh">/gh 规则代理</span>`
+                    typeBadge = `<span class="log-badge log-badge-gh"><i class="ri-github-line"></i> /gh 规则代理</span>`
                 }
 
-                let statusBadge = `<span class="status-pill status-pill-ok">${log.status_code}</span>`
+                let statusBadge = `<span class="status-pill status-pill-ok"><i class="ri-check-line"></i> ${log.status_code}</span>`
                 if (log.status_code >= 400) {
-                    statusBadge = `<span class="status-pill status-pill-err">${log.status_code}</span>`
+                    statusBadge = `<span class="status-pill status-pill-err"><i class="ri-close-line"></i> ${log.status_code}</span>`
                 }
 
-                const durationStr = log.duration_ms !== null ? `${log.duration_ms} ms` : '-'
+                let durationClass = 'latency-fast'
+                if (log.duration_ms > 400) durationClass = 'latency-slow'
+                else if (log.duration_ms > 150) durationClass = 'latency-med'
+
+                const durationStr = log.duration_ms !== null ? `<span class="${durationClass}">${log.duration_ms} ms</span>` : '-'
                 const targetDisplay = log.target_name || log.target_id || '-'
 
                 let extraInfo = ''
@@ -424,24 +428,35 @@ async function loadLogs() {
                     extraInfo += `<div class="log-error-msg"><i class="ri-error-warning-line"></i> ${log.error_message}</div>`
                 }
 
+                const lua = (log.user_agent || '').toLowerCase()
+                let devIcon = '<i class="ri-global-line"></i>'
+                if (lua.includes('android') || lua.includes('iphone') || lua.includes('mobile')) {
+                    devIcon = '<i class="ri-smartphone-line" style="color:#38bdf8"></i>'
+                } else if (lua.includes('windows') || lua.includes('macintosh') || lua.includes('mac os') || lua.includes('linux')) {
+                    devIcon = '<i class="ri-computer-line" style="color:#818cf8"></i>'
+                } else if (lua.includes('clash') || lua.includes('meta') || lua.includes('stash')) {
+                    devIcon = '<i class="ri-flashlight-line" style="color:#34d399"></i>'
+                }
+
                 return `
                     <tr>
-                        <td style="font-family: monospace; font-size: 0.78rem; color: var(--text-muted); white-space: nowrap">
+                        <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; color: var(--text-muted); white-space: nowrap">
                             ${log.created_at || '-'}
                         </td>
                         <td>${typeBadge}</td>
                         <td>${statusBadge}</td>
-                        <td style="font-family: monospace; font-size: 0.8rem">${durationStr}</td>
-                        <td style="font-weight: 500; font-size: 0.85rem; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title="${targetDisplay}">
+                        <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem">${durationStr}</td>
+                        <td style="font-weight: 600; font-size: 0.85rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title="${targetDisplay}">
                             ${targetDisplay}
                         </td>
                         <td>
                             <span class="country-tag">${log.client_country || 'XX'}</span>
-                            <span style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted)">${log.client_ip || '-'}</span>
+                            <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted)">${log.client_ip || '-'}</span>
                         </td>
                         <td>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title="${log.user_agent || ''}">
-                                ${log.user_agent || '-'}
+                            <div style="font-size: 0.76rem; color: var(--text-muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 0.35rem" title="${log.user_agent || ''}">
+                                ${devIcon}
+                                <span>${log.user_agent || '-'}</span>
                             </div>
                             ${extraInfo}
                         </td>
