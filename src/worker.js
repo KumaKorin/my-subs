@@ -192,6 +192,8 @@ export default {
             ctx.waitUntil(
                 logRequest(env.DB, {
                     request_type: 'sub',
+                    profile_id: targetProfile.id,
+                    profile_name: targetProfile.name,
                     target_id: targetProfile.id,
                     target_name: targetProfile.name,
                     client_ip: clientIp,
@@ -244,6 +246,8 @@ export default {
                 ctx.waitUntil(
                     logRequest(env.DB, {
                         request_type: 'provider-proxy',
+                        profile_id: targetProfile.id,
+                        profile_name: targetProfile.name,
                         target_id: providerId,
                         target_name: targetProvider?.name || 'Unknown',
                         client_ip: clientIp,
@@ -292,6 +296,8 @@ export default {
                 ctx.waitUntil(
                     logRequest(env.DB, {
                         request_type: 'provider-proxy',
+                        profile_id: targetProfile.id,
+                        profile_name: targetProfile.name,
                         target_id: targetProvider.id,
                         target_name: targetProvider.name,
                         client_ip: clientIp,
@@ -312,6 +318,8 @@ export default {
                 ctx.waitUntil(
                     logRequest(env.DB, {
                         request_type: 'provider-proxy',
+                        profile_id: targetProfile.id,
+                        profile_name: targetProfile.name,
                         target_id: targetProvider.id,
                         target_name: targetProvider.name,
                         client_ip: clientIp,
@@ -364,6 +372,8 @@ export default {
                 ctx.waitUntil(
                     logRequest(env.DB, {
                         request_type: 'gh-proxy',
+                        profile_id: targetProfile.id,
+                        profile_name: targetProfile.name,
                         target_id: targetProfile.id,
                         target_name: targetUrl,
                         client_ip: clientIp,
@@ -383,6 +393,8 @@ export default {
                 ctx.waitUntil(
                     logRequest(env.DB, {
                         request_type: 'gh-proxy',
+                        profile_id: targetProfile.id,
+                        profile_name: targetProfile.name,
                         target_id: targetProfile.id,
                         target_name: targetUrl,
                         client_ip: clientIp,

@@ -418,7 +418,23 @@ async function loadLogs() {
                 else if (log.duration_ms > 150) durationClass = 'latency-med'
 
                 const durationStr = log.duration_ms !== null ? `<span class="${durationClass}">${log.duration_ms} ms</span>` : '-'
-                const targetDisplay = log.target_name || log.target_id || '-'
+                
+                // 归属 Profile 展示
+                const profileDisplay = log.profile_name || (log.request_type === 'sub' ? log.target_name : '-') || '-'
+
+                // 目标/资源 展示
+                let targetCell = ''
+                if (log.request_type === 'sub') {
+                    targetCell = `<span style="font-weight: 600; color: var(--text-main); display: inline-flex; align-items: center; gap: 0.3rem"><i class="ri-file-download-line" style="color: #60a5fa"></i> 订阅全量配置</span>`
+                } else if (log.request_type === 'provider-proxy') {
+                    targetCell = `<span style="font-weight: 600; color: var(--text-main); display: inline-flex; align-items: center; gap: 0.3rem" title="${log.target_name || ''}"><i class="ri-plug-line" style="color: #34d399"></i> ${log.target_name || log.target_id || '-'}</span>`
+                } else if (log.request_type === 'gh-proxy') {
+                    const rawUrl = log.target_name || ''
+                    const shortName = rawUrl ? rawUrl.split('/').slice(-2).join('/') : '-'
+                    targetCell = `<span style="font-size: 0.78rem; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); max-width: 220px; display: inline-flex; align-items: center; gap: 0.3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title="${rawUrl}"><i class="ri-github-line" style="color: #c084fc"></i> ${shortName}</span>`
+                } else {
+                    targetCell = `<span title="${log.target_name || ''}">${log.target_name || '-'}</span>`
+                }
 
                 let extraInfo = ''
                 if (log.user_info) {
@@ -446,8 +462,11 @@ async function loadLogs() {
                         <td>${typeBadge}</td>
                         <td>${statusBadge}</td>
                         <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem">${durationStr}</td>
-                        <td style="font-weight: 600; font-size: 0.85rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title="${targetDisplay}">
-                            ${targetDisplay}
+                        <td>
+                            <span class="profile-chip" title="归属 Profile: ${profileDisplay}"><i class="ri-user-smile-line"></i> ${profileDisplay}</span>
+                        </td>
+                        <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                            ${targetCell}
                         </td>
                         <td>
                             <span class="country-tag">${log.client_country || 'XX'}</span>
@@ -467,7 +486,7 @@ async function loadLogs() {
     } catch (e) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; color: var(--danger); padding: 2rem;">
+                <td colspan="8" style="text-align: center; color: var(--danger); padding: 2rem;">
                     获取日志失败: ${e.message}
                 </td>
             </tr>
@@ -540,6 +559,27 @@ function collectCurrentProfileFormData() {
 
 // 绑定全局事件
 function bindGlobalEvents() {
+    // 0. 主题切换
+    const btnThemeToggle = document.getElementById('btn-theme-toggle')
+    const themeToggleIcon = document.getElementById('theme-toggle-icon')
+    function updateThemeIcon(theme) {
+        if (themeToggleIcon) {
+            themeToggleIcon.className = theme === 'light' ? 'ri-moon-line' : 'ri-sun-line'
+        }
+    }
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark'
+    updateThemeIcon(currentTheme)
+
+    if (btnThemeToggle) {
+        btnThemeToggle.addEventListener('click', () => {
+            const now = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light'
+            document.documentElement.setAttribute('data-theme', now)
+            localStorage.setItem('theme', now)
+            updateThemeIcon(now)
+            showToast(now === 'light' ? '已切换至浅色模式' : '已切换至深色模式')
+        })
+    }
+
     // 1. 退出登录
     const btnLogout = document.getElementById('btn-logout')
     if (btnLogout) {

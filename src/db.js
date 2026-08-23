@@ -52,6 +52,8 @@ export async function initD1Tables(db) {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 request_type TEXT NOT NULL,
+                profile_id TEXT,
+                profile_name TEXT,
                 target_id TEXT,
                 target_name TEXT,
                 client_ip TEXT,
@@ -72,10 +74,21 @@ export async function initD1Tables(db) {
 export async function ensureD1Tables(db) {
     if (!db) return
     if (!tablesInitPromise) {
-        tablesInitPromise = initD1Tables(db).catch(err => {
-            console.error('Failed to init D1 tables:', err)
-            tablesInitPromise = null
-        })
+        tablesInitPromise = (async () => {
+            try {
+                await initD1Tables(db)
+                // 兼容已有数据库添加 profile_name / profile_id 字段
+                try {
+                    await db.prepare('ALTER TABLE pull_logs ADD COLUMN profile_name TEXT').run()
+                } catch {}
+                try {
+                    await db.prepare('ALTER TABLE pull_logs ADD COLUMN profile_id TEXT').run()
+                } catch {}
+            } catch (err) {
+                console.error('Failed to init D1 tables:', err)
+                tablesInitPromise = null
+            }
+        })()
     }
     await tablesInitPromise
 }
@@ -408,6 +421,8 @@ export async function dbSaveProfiles(db, profilesArray) {
 
 export async function logRequest(db, {
     request_type,
+    profile_id = null,
+    profile_name = null,
     target_id = null,
     target_name = null,
     client_ip = null,
@@ -423,11 +438,13 @@ export async function logRequest(db, {
         await ensureD1Tables(db)
         await db.prepare(`
             INSERT INTO pull_logs (
-                request_type, target_id, target_name, client_ip, client_country,
+                request_type, profile_id, profile_name, target_id, target_name, client_ip, client_country,
                 user_agent, status_code, duration_ms, error_message, user_info, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         `).bind(
             request_type,
+            profile_id,
+            profile_name,
             target_id,
             target_name,
             client_ip,

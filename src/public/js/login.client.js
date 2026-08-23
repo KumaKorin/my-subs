@@ -17,6 +17,26 @@ function showToast(msg, isError = false) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 主题切换逻辑
+    const btnTheme = document.getElementById('btn-login-theme-toggle')
+    const themeIcon = document.getElementById('login-theme-icon')
+    function updateLoginThemeIcon(theme) {
+        if (themeIcon) {
+            themeIcon.className = theme === 'light' ? 'ri-moon-line' : 'ri-sun-line'
+        }
+    }
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark'
+    updateLoginThemeIcon(currentTheme)
+
+    if (btnTheme) {
+        btnTheme.addEventListener('click', () => {
+            const now = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light'
+            document.documentElement.setAttribute('data-theme', now)
+            localStorage.setItem('theme', now)
+            updateLoginThemeIcon(now)
+        })
+    }
+
     const loginForm = document.getElementById('login-form')
     if (loginForm) {
         loginForm.addEventListener('submit', async e => {

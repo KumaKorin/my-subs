@@ -12,10 +12,26 @@
         />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" />
         <link rel="stylesheet" href="./public/css/style.css" />
+        <script>
+            (function () {
+                const savedTheme = localStorage.getItem('theme') || 'dark'
+                document.documentElement.setAttribute('data-theme', savedTheme)
+            })()
+        </script>
     </head>
     <body>
         <div class="auth-container">
             <div class="auth-card">
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem">
+                    <button
+                        id="btn-login-theme-toggle"
+                        class="btn btn-secondary"
+                        style="padding: 0.35rem 0.65rem; font-size: 0.85rem"
+                        title="切换明亮/暗黑主题"
+                    >
+                        <i id="login-theme-icon" class="ri-sun-line"></i>
+                    </button>
+                </div>
                 <h1><i class="ri-flashlight-line"></i> Clash Subs</h1>
                 <p>请输入管理员 Token 登录管理面板</p>
                 <form id="login-form">

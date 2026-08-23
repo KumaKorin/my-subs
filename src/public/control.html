@@ -13,6 +13,12 @@
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" />
         <link rel="stylesheet" href="./public/css/style.css" />
         <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+        <script>
+            ;(function () {
+                const savedTheme = localStorage.getItem('theme') || 'dark'
+                document.documentElement.setAttribute('data-theme', savedTheme)
+            })()
+        </script>
     </head>
     <body>
         <div id="app-section" class="app-container">
@@ -34,9 +40,12 @@
 
             <header>
                 <div class="logo-area">
-                    <h1><i class="ri-flashlight-fill" style="color: var(--primary)"></i> Clash 订阅分发中心</h1>
+                    <h1><i class="ri-flashlight-fill"></i> Clash 订阅分发中心</h1>
                 </div>
                 <div class="btn-group">
+                    <button id="btn-theme-toggle" class="btn btn-secondary" title="切换浅色/深色主题">
+                        <i id="theme-toggle-icon" class="ri-sun-line"></i>
+                    </button>
                     <button id="btn-open-global-yaml" class="btn btn-secondary">
                         <i class="ri-global-line"></i> 全局 Base YAML
                     </button>
@@ -57,9 +66,7 @@
                 <button class="nav-tab" data-tab="tab-providers">
                     <i class="ri-archive-line"></i> Provider 资源池管理
                 </button>
-                <button class="nav-tab" data-tab="tab-logs">
-                    <i class="ri-history-line"></i> 请求日志与排障
-                </button>
+                <button class="nav-tab" data-tab="tab-logs"><i class="ri-history-line"></i> 请求日志与排障</button>
             </div>
 
             <!-- TAB 1: Profile 订阅管理 -->
@@ -304,7 +311,11 @@
                     <div class="section-header" style="flex-wrap: wrap; gap: 0.75rem">
                         <div class="section-title"><i class="ri-history-line"></i> 实时请求日志流水</div>
                         <div class="logs-toolbar">
-                            <select id="log-filter-type" class="input-field" style="margin-bottom: 0; width: 140px; padding: 0.4rem 0.6rem">
+                            <select
+                                id="log-filter-type"
+                                class="input-field"
+                                style="margin-bottom: 0; width: 140px; padding: 0.4rem 0.6rem"
+                            >
                                 <option value="all">全部请求类型</option>
                                 <option value="sub">/sub (分发)</option>
                                 <option value="provider-proxy">/provider-proxy (节点)</option>
@@ -330,7 +341,8 @@
                                     <th style="width: 140px">时间</th>
                                     <th style="width: 130px">类型</th>
                                     <th style="width: 80px">状态</th>
-                                    <th style="width: 80px">耗时</th>
+                                    <th style="width: 75px">耗时</th>
+                                    <th style="width: 130px">归属 Profile</th>
                                     <th>目标 / 资源</th>
                                     <th style="width: 160px">客户端 IP / 地区</th>
                                     <th>客户端 UA / 流量信息</th>
@@ -338,7 +350,7 @@
                             </thead>
                             <tbody id="logs-tbody">
                                 <tr>
-                                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem">
+                                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem">
                                         加载中...
                                     </td>
                                 </tr>
