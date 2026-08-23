@@ -82,7 +82,7 @@ export class ProvidersComponent {
             <span style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace;">ID: ${p.id || 'N/A'}</span>
           </div>
           <button class="btn btn-danger btn-delete-provider" data-index="${idx}" style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">
-            🗑️ 删除
+            <i class="ri-delete-bin-line"></i> 删除
           </button>
         </div>
 

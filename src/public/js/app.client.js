@@ -51,14 +51,14 @@ function createYamlLinter(statusElementId) {
             window.jsyaml.load(doc)
             if (statusEl) {
                 statusEl.style.display = 'inline-flex'
-                statusEl.textContent = '✅ YAML 格式正确'
+                statusEl.innerHTML = '<i class="ri-checkbox-circle-line"></i> YAML 格式正确'
                 statusEl.style.color = 'var(--success)'
             }
         } catch (e) {
             if (statusEl) {
                 statusEl.style.display = 'inline-flex'
                 const lineNum = e.mark?.line !== undefined ? e.mark.line + 1 : '?'
-                statusEl.textContent = `❌ 第 ${lineNum} 行语法错误`
+                statusEl.innerHTML = `<i class="ri-error-warning-line"></i> 第 ${lineNum} 行语法错误`
                 statusEl.style.color = 'var(--danger)'
             }
 
@@ -502,6 +502,11 @@ function bindGlobalEvents() {
             if (subUrl) {
                 navigator.clipboard.writeText(subUrl)
                 showToast('订阅链接已复制到剪贴板')
+                const originalHtml = btnCopySub.innerHTML
+                btnCopySub.innerHTML = '<i class="ri-check-line"></i> 已复制'
+                setTimeout(() => {
+                    btnCopySub.innerHTML = originalHtml
+                }, 2000)
             }
         })
     }
@@ -627,7 +632,7 @@ function bindGlobalEvents() {
             if (data.success) {
                 previewModal.style.display = 'flex'
                 if (previewTitle) {
-                    previewTitle.textContent = `📄 「${data.profileName || 'Profile'}」最终分发 YAML 预览 (包含 ${data.providerCount || 0} 个订阅源)`
+                    previewTitle.innerHTML = `<i class="ri-file-text-line"></i> 「${data.profileName || 'Profile'}」最终分发 YAML 预览 (包含 ${data.providerCount || 0} 个订阅源)`
                 }
                 if (!previewEditorView && previewContainer) {
                     previewEditorView = createEditor(previewContainer, data.yaml || '', true)

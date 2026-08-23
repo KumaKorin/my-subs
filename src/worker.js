@@ -5,6 +5,8 @@ import {
     saveGlobalBaseYaml,
     getProvidersPool,
     saveProvidersPool,
+    getProvidersByIds,
+    getProviderById,
     getProfiles,
     saveProfiles,
     getProfileByToken
@@ -142,10 +144,8 @@ export default {
                 baseYaml = targetProfile.customBaseYaml || (await getGlobalBaseYaml(env))
             }
 
-            // 获取启用的 Providers
-            const pool = await getProvidersPool(env)
-            const enabledIds = new Set(targetProfile.enabledProviderIds || [])
-            const activeProviders = pool.filter(p => enabledIds.has(p.id))
+            // 获取启用的 Providers (仅拉取并解密该 Profile 启用的 Provider 节点)
+            const activeProviders = await getProvidersByIds(targetProfile.enabledProviderIds || [], env)
 
             const settings = targetProfile.settings || {}
             const proxyBaseUrl = `${currentOrigin}${prefix}/provider-proxy?token=${encodeURIComponent(queryToken)}&id=`
@@ -185,22 +185,46 @@ export default {
                 return new Response('Invalid subscription token', { status: 403 })
             }
 
-            const pool = await getProvidersPool(env)
             const enabledIds = new Set(targetProfile.enabledProviderIds || [])
-            const targetProvider = pool.find(
-                p => (p.id === providerId || p.name === providerId) && enabledIds.has(p.id)
-            )
+            let targetProvider = null
+
+            // 优先通过 Provider ID 直接读取 (单 Key 解密)
+            if (enabledIds.has(providerId)) {
+                targetProvider = await getProviderById(providerId, env)
+            } else {
+                // 兼容按 name 查找
+                const pool = await getProvidersPool(env)
+                targetProvider = pool.find(
+                    p => (p.id === providerId || p.name === providerId) && enabledIds.has(p.id)
+                )
+            }
+
             if (!targetProvider || !targetProvider.url) {
                 return new Response('Provider not found or not enabled in this profile', { status: 404 })
             }
 
             try {
-                // 由 Worker 代表发起外部订阅拉取请求
-                const upstreamRes = await fetch(targetProvider.url, {
-                    headers: {
-                        'User-Agent': request.headers.get('User-Agent') || 'Clash/1.18.0',
-                        Accept: '*/*'
+                // 由 Worker 代表发起外部订阅拉取请求，透传客户端请求头 (User-Agent, Accept 等)，过滤 host 相关头
+                const forwardHeaders = new Headers()
+                for (const [key, val] of request.headers.entries()) {
+                    const lk = key.toLowerCase()
+                    if (
+                        lk !== 'host' &&
+                        lk !== 'cookie' &&
+                        lk !== 'x-forwarded-host' &&
+                        lk !== 'x-forwarded-proto' &&
+                        lk !== 'x-real-ip' &&
+                        !lk.startsWith('cf-')
+                    ) {
+                        forwardHeaders.set(key, val)
                     }
+                }
+                if (!forwardHeaders.get('User-Agent')) {
+                    forwardHeaders.set('User-Agent', 'Clash/1.18.0')
+                }
+
+                const upstreamRes = await fetch(targetProvider.url, {
+                    headers: forwardHeaders
                 })
 
                 const responseHeaders = new Headers(upstreamRes.headers)
@@ -461,9 +485,7 @@ export default {
                     baseYaml = targetProfile.customBaseYaml || (await getGlobalBaseYaml(env))
                 }
 
-                const pool = await getProvidersPool(env)
-                const enabledIds = new Set(targetProfile.enabledProviderIds || [])
-                const activeProviders = pool.filter(p => enabledIds.has(p.id))
+                const activeProviders = await getProvidersByIds(targetProfile.enabledProviderIds || [], env)
 
                 const token = targetProfile.token
                 const settings = targetProfile.settings || {}
