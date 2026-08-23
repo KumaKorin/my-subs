@@ -170,20 +170,9 @@
                         </div>
 
                         <!-- Global YAML 模式切换 Switch -->
-                        <div
-                            style="
-                                background: rgba(15, 23, 42, 0.6);
-                                border: 1px solid var(--card-border);
-                                border-radius: var(--radius);
-                                padding: 0.75rem 1rem;
-                                margin-bottom: 0.75rem;
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                            "
-                        >
+                        <div class="global-yaml-switch-box">
                             <div>
-                                <div style="font-weight: 500; font-size: 0.9rem">使用全局通用 Base YAML</div>
+                                <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-main)">使用全局通用 Base YAML</div>
                                 <div style="font-size: 0.75rem; color: var(--text-muted)">
                                     开启后使用全局统一定义的基础规则，无需为本 Profile 单独维护
                                 </div>
@@ -194,24 +183,14 @@
                         </div>
 
                         <!-- 启用全局 YAML 时的提示占位面板 -->
-                        <div
-                            id="global-yaml-active-banner"
-                            style="
-                                display: none;
-                                padding: 2.5rem 1.5rem;
-                                text-align: center;
-                                border: 1px dashed var(--card-border);
-                                border-radius: var(--radius);
-                                background: #0f172a;
-                            "
-                        >
+                        <div id="global-yaml-active-banner" class="global-yaml-active-box" style="display: none">
                             <div style="font-size: 2.5rem; margin-bottom: 0.5rem; color: var(--primary)">
                                 <i class="ri-global-line"></i>
                             </div>
-                            <div style="font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem">
+                            <div style="font-weight: 700; font-size: 1rem; margin-bottom: 0.25rem; color: var(--text-main)">
                                 已启用「全局 Base YAML」
                             </div>
-                            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem">
+                            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem">
                                 当前 Profile 分发时将直接复用统一的基础配置模版。
                             </p>
                             <button id="btn-banner-edit-global" class="btn btn-secondary">
@@ -344,7 +323,7 @@
                                     <th style="width: 75px">耗时</th>
                                     <th style="width: 130px">归属 Profile</th>
                                     <th>目标 / 资源</th>
-                                    <th style="width: 160px">客户端 IP / 地区</th>
+                                    <th style="width: 175px">地区 / IP</th>
                                     <th>客户端 UA / 流量信息</th>
                                 </tr>
                             </thead>
@@ -356,6 +335,43 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <!-- 日志分页控制栏 -->
+                    <div
+                        class="logs-pagination-bar"
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-top: 1rem;
+                            flex-wrap: wrap;
+                            gap: 0.75rem;
+                        "
+                    >
+                        <div style="font-size: 0.85rem; color: var(--text-muted)">
+                            共 <b id="logs-total-count" style="color: var(--text-main)">0</b> 条记录 (当前第
+                            <span id="logs-current-page" style="color: var(--text-main); font-weight: 600">1</span>
+                            / <span id="logs-total-pages">1</span> 页)
+                        </div>
+                        <div class="btn-group">
+                            <button
+                                id="btn-logs-prev"
+                                class="btn btn-secondary"
+                                style="padding: 0.35rem 0.8rem; font-size: 0.85rem"
+                                disabled
+                            >
+                                <i class="ri-arrow-left-s-line"></i> 上一页
+                            </button>
+                            <button
+                                id="btn-logs-next"
+                                class="btn btn-secondary"
+                                style="padding: 0.35rem 0.8rem; font-size: 0.85rem"
+                                disabled
+                            >
+                                下一页 <i class="ri-arrow-right-s-line"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

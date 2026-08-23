@@ -153,19 +153,24 @@ export default {
             }
 
             const targetProfile = await getProfileByToken(queryToken, env)
-            if (!targetProfile) {
+            if (!targetProfile || targetProfile.isDeleted) {
+                const isDel = targetProfile?.isDeleted
                 ctx.waitUntil(
                     logRequest(env.DB, {
                         request_type: 'sub',
+                        profile_id: targetProfile?.id || null,
+                        profile_name: targetProfile?.name || null,
+                        target_id: targetProfile?.id || null,
+                        target_name: targetProfile?.name || null,
                         client_ip: clientIp,
                         client_country: clientCountry,
                         user_agent: userAgent,
                         status_code: 403,
                         duration_ms: Date.now() - reqStartTime,
-                        error_message: 'Invalid subscription token'
+                        error_message: isDel ? 'Profile 已被软删除/停用' : 'Invalid subscription token'
                     })
                 )
-                return new Response('Invalid subscription token', { status: 403 })
+                return new Response(isDel ? 'Profile has been deleted' : 'Invalid subscription token', { status: 403 })
             }
 
             let baseYaml = ''
@@ -226,8 +231,8 @@ export default {
             }
 
             const targetProfile = await getProfileByToken(queryToken, env)
-            if (!targetProfile) {
-                return new Response('Invalid subscription token', { status: 403 })
+            if (!targetProfile || targetProfile.isDeleted) {
+                return new Response('Invalid subscription token or profile deleted', { status: 403 })
             }
 
             const enabledIds = new Set(targetProfile.enabledProviderIds || [])
@@ -345,8 +350,8 @@ export default {
             }
 
             const targetProfile = await getProfileByToken(queryToken, env)
-            if (!targetProfile) {
-                return new Response('Invalid subscription token', { status: 403 })
+            if (!targetProfile || targetProfile.isDeleted) {
+                return new Response('Invalid subscription token or profile deleted', { status: 403 })
             }
 
             if (!isAllowedGithubUrl(targetUrl)) {

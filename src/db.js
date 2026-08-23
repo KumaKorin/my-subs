@@ -30,6 +30,7 @@ export async function initD1Tables(db) {
                 last_status INTEGER,
                 last_traffic_info TEXT,
                 last_fetched_at TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `),
@@ -42,6 +43,7 @@ export async function initD1Tables(db) {
                 custom_base_yaml TEXT DEFAULT '',
                 enabled_provider_ids TEXT DEFAULT '[]',
                 settings_json TEXT DEFAULT '{}',
+                is_deleted INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -77,7 +79,13 @@ export async function ensureD1Tables(db) {
         tablesInitPromise = (async () => {
             try {
                 await initD1Tables(db)
-                // 兼容已有数据库添加 profile_name / profile_id 字段
+                // 兼容已有数据库字段自愈升级
+                try {
+                    await db.prepare('ALTER TABLE providers ADD COLUMN is_deleted INTEGER DEFAULT 0').run()
+                } catch {}
+                try {
+                    await db.prepare('ALTER TABLE profiles ADD COLUMN is_deleted INTEGER DEFAULT 0').run()
+                } catch {}
                 try {
                     await db.prepare('ALTER TABLE pull_logs ADD COLUMN profile_name TEXT').run()
                 } catch {}
@@ -132,7 +140,7 @@ export async function dbGetProvidersPool(db, appSecret) {
     if (!db) return []
     await ensureD1Tables(db)
     try {
-        const { results } = await db.prepare('SELECT * FROM providers ORDER BY updated_at ASC').all()
+        const { results } = await db.prepare('SELECT * FROM providers WHERE is_deleted = 0 OR is_deleted IS NULL ORDER BY updated_at ASC').all()
         if (!results || results.length === 0) return []
 
         const decryptedList = await Promise.all(
@@ -177,7 +185,7 @@ export async function dbGetProviderById(db, id, appSecret) {
         if (!row) return null
 
         let url = ''
-        if (row.url_encrypted) {
+        if (row.url_encrypted && row.is_deleted !== 1) {
             try {
                 url = await decryptAesGcm(row.url_encrypted, appSecret)
             } catch (err) {
@@ -198,6 +206,7 @@ export async function dbGetProviderById(db, id, appSecret) {
             lastStatus: row.last_status,
             lastTrafficInfo: row.last_traffic_info,
             lastFetchedAt: row.last_fetched_at,
+            isDeleted: row.is_deleted === 1,
             updatedAt: row.updated_at
         }
     } catch (err) {
@@ -211,7 +220,7 @@ export async function dbSaveProvidersPool(db, providersArray, appSecret) {
     await ensureD1Tables(db)
 
     try {
-        const { results } = await db.prepare('SELECT id FROM providers').all()
+        const { results } = await db.prepare('SELECT id FROM providers WHERE is_deleted = 0 OR is_deleted IS NULL').all()
         const existingIds = new Set((results || []).map(r => r.id))
 
         const newIds = new Set()
@@ -226,8 +235,8 @@ export async function dbSaveProvidersPool(db, providersArray, appSecret) {
                 db.prepare(`
                     INSERT INTO providers (
                         id, name, type, proxy, url_encrypted, interval, health_check_enable, 
-                        health_check_interval, use_worker_proxy, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        health_check_interval, use_worker_proxy, is_deleted, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         type = excluded.type,
@@ -237,6 +246,7 @@ export async function dbSaveProvidersPool(db, providersArray, appSecret) {
                         health_check_enable = excluded.health_check_enable,
                         health_check_interval = excluded.health_check_interval,
                         use_worker_proxy = excluded.use_worker_proxy,
+                        is_deleted = 0,
                         updated_at = CURRENT_TIMESTAMP
                 `).bind(
                     p.id,
@@ -252,9 +262,12 @@ export async function dbSaveProvidersPool(db, providersArray, appSecret) {
             )
         }
 
+        // 软删除：擦除订阅 URL 并标记 is_deleted = 1，保留记录以供日志排障
         for (const oldId of existingIds) {
             if (!newIds.has(oldId)) {
-                statements.push(db.prepare('DELETE FROM providers WHERE id = ?').bind(oldId))
+                statements.push(
+                    db.prepare("UPDATE providers SET is_deleted = 1, url_encrypted = '', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(oldId)
+                )
             }
         }
 
@@ -293,7 +306,7 @@ export async function dbGetProfiles(db) {
     if (!db) return []
     await ensureD1Tables(db)
     try {
-        const { results } = await db.prepare('SELECT * FROM profiles ORDER BY created_at ASC').all()
+        const { results } = await db.prepare('SELECT * FROM profiles WHERE is_deleted = 0 OR is_deleted IS NULL ORDER BY created_at ASC').all()
         if (!results || results.length === 0) return []
 
         return results.map(row => {
@@ -348,6 +361,7 @@ export async function dbGetProfileByToken(db, token) {
             customBaseYaml: row.custom_base_yaml || '',
             enabledProviderIds,
             settings,
+            isDeleted: row.is_deleted === 1,
             createdAt: row.created_at,
             updatedAt: row.updated_at
         }
@@ -362,7 +376,7 @@ export async function dbSaveProfiles(db, profilesArray) {
     await ensureD1Tables(db)
 
     try {
-        const { results } = await db.prepare('SELECT id FROM profiles').all()
+        const { results } = await db.prepare('SELECT id FROM profiles WHERE is_deleted = 0 OR is_deleted IS NULL').all()
         const existingIds = new Set((results || []).map(r => r.id))
 
         const newIds = new Set()
@@ -379,8 +393,8 @@ export async function dbSaveProfiles(db, profilesArray) {
             statements.push(
                 db.prepare(`
                     INSERT INTO profiles (
-                        id, name, token, use_global_yaml, custom_base_yaml, enabled_provider_ids, settings_json, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        id, name, token, use_global_yaml, custom_base_yaml, enabled_provider_ids, settings_json, is_deleted, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         token = excluded.token,
@@ -388,6 +402,7 @@ export async function dbSaveProfiles(db, profilesArray) {
                         custom_base_yaml = excluded.custom_base_yaml,
                         enabled_provider_ids = excluded.enabled_provider_ids,
                         settings_json = excluded.settings_json,
+                        is_deleted = 0,
                         updated_at = CURRENT_TIMESTAMP
                 `).bind(
                     p.id,
@@ -401,9 +416,12 @@ export async function dbSaveProfiles(db, profilesArray) {
             )
         }
 
+        // 软删除：标记 is_deleted = 1，保留名称和 Token 记录以供日志识别
         for (const oldId of existingIds) {
             if (!newIds.has(oldId)) {
-                statements.push(db.prepare('DELETE FROM profiles WHERE id = ?').bind(oldId))
+                statements.push(
+                    db.prepare('UPDATE profiles SET is_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(oldId)
+                )
             }
         }
 

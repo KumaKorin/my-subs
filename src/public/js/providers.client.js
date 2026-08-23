@@ -9,6 +9,30 @@ function formatBytes(bytes) {
     return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`
 }
 
+function formatLocalTime(utcStr) {
+    if (!utcStr) return '-'
+    try {
+        let str = String(utcStr).trim()
+        if (!str.endsWith('Z') && !str.includes('+')) {
+            str = str.replace(' ', 'T') + 'Z'
+        }
+        const date = new Date(str)
+        if (isNaN(date.getTime())) return utcStr
+
+        const pad = n => String(n).padStart(2, '0')
+        const y = date.getFullYear()
+        const m = pad(date.getMonth() + 1)
+        const d = pad(date.getDate())
+        const hh = pad(date.getHours())
+        const mm = pad(date.getMinutes())
+        const ss = pad(date.getSeconds())
+
+        return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+    } catch {
+        return utcStr
+    }
+}
+
 function parseTrafficInfo(headerStr) {
     if (!headerStr) return null
     try {
@@ -110,9 +134,9 @@ export class ProvidersComponent {
                 let statusBadge = `<span class="health-badge health-idle"><i class="ri-indeterminate-circle-line"></i> 暂未拉取</span>`
                 if (p.lastStatus) {
                     if (p.lastStatus >= 200 && p.lastStatus < 300) {
-                        statusBadge = `<span class="health-badge health-ok" title="最近拉取: ${p.lastFetchedAt || '刚刚'}"><i class="ri-checkbox-circle-fill"></i> ${p.lastStatus} OK</span>`
+                        statusBadge = `<span class="health-badge health-ok" title="最近拉取: ${formatLocalTime(p.lastFetchedAt)}"><i class="ri-checkbox-circle-fill"></i> ${p.lastStatus} OK</span>`
                     } else {
-                        statusBadge = `<span class="health-badge health-err" title="最近拉取失败: ${p.lastFetchedAt || '刚刚'}"><i class="ri-error-warning-fill"></i> ${p.lastStatus} Error</span>`
+                        statusBadge = `<span class="health-badge health-err" title="最近拉取失败: ${formatLocalTime(p.lastFetchedAt)}"><i class="ri-error-warning-fill"></i> ${p.lastStatus} Error</span>`
                     }
                 }
 

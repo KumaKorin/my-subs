@@ -1,5 +1,6 @@
 import { ProvidersComponent } from './providers.client.js'
 import { EditorView, basicSetup } from 'https://esm.sh/codemirror@6.0.1'
+import { Compartment } from 'https://esm.sh/@codemirror/state@6.4.1'
 import { yaml } from 'https://esm.sh/@codemirror/lang-yaml@6.1.1'
 import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6.1.2'
 import { linter, lintGutter } from 'https://esm.sh/@codemirror/lint@6.8.4'
@@ -20,6 +21,33 @@ let globalYamlEditorView = null
 let previewEditorView = null
 let poolProvidersComp = null
 let logsTimer = null
+let logsCurrentPage = 1
+const logsPageSize = 25
+let logsTotalCount = 0
+let logsTotalPages = 1
+
+const themeCompartment = new Compartment()
+
+function isCurrentLight() {
+    return document.documentElement.getAttribute('data-theme') === 'light'
+}
+
+function getThemeExtension(isLight) {
+    return isLight ? [] : [oneDark]
+}
+
+function updateEditorThemes(isLight) {
+    const ext = getThemeExtension(isLight)
+    if (customYamlEditorView) {
+        try { customYamlEditorView.dispatch({ effects: themeCompartment.reconfigure(ext) }) } catch {}
+    }
+    if (globalYamlEditorView) {
+        try { globalYamlEditorView.dispatch({ effects: themeCompartment.reconfigure(ext) }) } catch {}
+    }
+    if (previewEditorView) {
+        try { previewEditorView.dispatch({ effects: themeCompartment.reconfigure(ext) }) } catch {}
+    }
+}
 
 // 生成 64 字符随机 Hex Token
 function generateRandomHex(byteLength = 32) {
@@ -82,9 +110,15 @@ function createYamlLinter(statusElementId) {
     })
 }
 
-// 创建 CodeMirror 实例
+// 创建 CodeMirror 实例 (自适应明亮/暗黑主题)
 function createEditor(container, doc = '', readOnly = false, linterStatusId = null) {
-    const extensions = [basicSetup, yaml(), oneDark, EditorView.lineWrapping]
+    const isLight = isCurrentLight()
+    const extensions = [
+        basicSetup,
+        yaml(),
+        themeCompartment.of(getThemeExtension(isLight)),
+        EditorView.lineWrapping
+    ]
 
     if (readOnly) {
         extensions.push(EditorView.editable.of(false))
@@ -109,6 +143,31 @@ function setEditorContent(editorView, content) {
             insert: content || ''
         }
     })
+}
+
+// 转换 UTC 时间字符串为用户浏览器本地时区时间
+function formatLocalTime(utcStr) {
+    if (!utcStr) return '-'
+    try {
+        let str = String(utcStr).trim()
+        if (!str.endsWith('Z') && !str.includes('+')) {
+            str = str.replace(' ', 'T') + 'Z'
+        }
+        const date = new Date(str)
+        if (isNaN(date.getTime())) return utcStr
+
+        const pad = n => String(n).padStart(2, '0')
+        const y = date.getFullYear()
+        const m = pad(date.getMonth() + 1)
+        const d = pad(date.getDate())
+        const hh = pad(date.getHours())
+        const mm = pad(date.getMinutes())
+        const ss = pad(date.getSeconds())
+
+        return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+    } catch {
+        return utcStr
+    }
 }
 
 // 获取注入的 Base Prefix
@@ -360,7 +419,8 @@ async function loadStats() {
     } catch {}
 }
 
-async function loadLogs() {
+async function loadLogs(page = null) {
+    if (page !== null) logsCurrentPage = page
     const tbody = document.getElementById('logs-tbody')
     if (!tbody) return
 
@@ -369,16 +429,32 @@ async function loadLogs() {
 
     const type = typeSelect ? typeSelect.value : 'all'
     const errorOnly = errorOnlyCheckbox && errorOnlyCheckbox.checked ? '1' : '0'
+    const offset = (logsCurrentPage - 1) * logsPageSize
 
     try {
-        const res = await fetch(apiUrl(`/api/logs?limit=50&type=${encodeURIComponent(type)}&errorOnly=${errorOnly}`))
+        const res = await fetch(apiUrl(`/api/logs?limit=${logsPageSize}&offset=${offset}&type=${encodeURIComponent(type)}&errorOnly=${errorOnly}`))
         const result = await res.json()
         const { logs, total, hasD1 } = result.data || {}
+        logsTotalCount = total || 0
+        logsTotalPages = Math.max(1, Math.ceil(logsTotalCount / logsPageSize))
+
+        // 更新分页指示与按钮状态
+        const elTotal = document.getElementById('logs-total-count')
+        const elCurrent = document.getElementById('logs-current-page')
+        const elPages = document.getElementById('logs-total-pages')
+        const btnPrev = document.getElementById('btn-logs-prev')
+        const btnNext = document.getElementById('btn-logs-next')
+
+        if (elTotal) elTotal.textContent = logsTotalCount
+        if (elCurrent) elCurrent.textContent = logsCurrentPage
+        if (elPages) elPages.textContent = logsTotalPages
+        if (btnPrev) btnPrev.disabled = logsCurrentPage <= 1
+        if (btnNext) btnNext.disabled = logsCurrentPage >= logsTotalPages
 
         if (!hasD1 && logs?.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
                         <i class="ri-database-2-line" style="font-size: 1.5rem; display:block; margin-bottom: 0.5rem;"></i>
                         未绑定 Cloudflare D1 数据库，日志功能暂未激活。<br>
                         请在 <code>wrangler.toml</code> 中添加 <code>[[d1_databases]]</code> 绑定。
@@ -391,7 +467,7 @@ async function loadLogs() {
         if (!logs || logs.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
                         暂无请求日志记录
                     </td>
                 </tr>
@@ -436,12 +512,13 @@ async function loadLogs() {
                     targetCell = `<span title="${log.target_name || ''}">${log.target_name || '-'}</span>`
                 }
 
-                let extraInfo = ''
+                // 流量与错误悬浮小 icon
+                let infoIcon = ''
                 if (log.user_info) {
-                    extraInfo += `<div class="log-user-info" title="${log.user_info}"><i class="ri-pie-chart-line"></i> ${log.user_info}</div>`
+                    infoIcon += `<span class="log-info-circle" title="节点流量: ${log.user_info}"><i class="ri-information-line"></i></span>`
                 }
                 if (log.error_message) {
-                    extraInfo += `<div class="log-error-msg"><i class="ri-error-warning-line"></i> ${log.error_message}</div>`
+                    infoIcon += `<span class="log-err-circle" title="异常信息: ${log.error_message}"><i class="ri-error-warning-line"></i></span>`
                 }
 
                 const lua = (log.user_agent || '').toLowerCase()
@@ -457,7 +534,7 @@ async function loadLogs() {
                 return `
                     <tr>
                         <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; color: var(--text-muted); white-space: nowrap">
-                            ${log.created_at || '-'}
+                            ${formatLocalTime(log.created_at)}
                         </td>
                         <td>${typeBadge}</td>
                         <td>${statusBadge}</td>
@@ -468,16 +545,18 @@ async function loadLogs() {
                         <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
                             ${targetCell}
                         </td>
-                        <td>
-                            <span class="country-tag">${log.client_country || 'XX'}</span>
-                            <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted)">${log.client_ip || '-'}</span>
+                        <td style="white-space: nowrap">
+                            <div style="display: inline-flex; align-items: center; gap: 0.45rem; white-space: nowrap">
+                                <span class="country-tag">${log.client_country || 'XX'}</span>
+                                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted)">${log.client_ip || '-'}</span>
+                            </div>
                         </td>
                         <td>
-                            <div style="font-size: 0.76rem; color: var(--text-muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 0.35rem" title="${log.user_agent || ''}">
+                            <div style="font-size: 0.76rem; color: var(--text-muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 0.35rem" title="${log.user_agent || ''}">
                                 ${devIcon}
                                 <span>${log.user_agent || '-'}</span>
+                                ${infoIcon}
                             </div>
-                            ${extraInfo}
                         </td>
                     </tr>
                 `
@@ -576,6 +655,7 @@ function bindGlobalEvents() {
             document.documentElement.setAttribute('data-theme', now)
             localStorage.setItem('theme', now)
             updateThemeIcon(now)
+            updateEditorThemes(now === 'light')
             showToast(now === 'light' ? '已切换至浅色模式' : '已切换至深色模式')
         })
     }
@@ -883,26 +963,48 @@ function bindGlobalEvents() {
 
     const logFilterType = document.getElementById('log-filter-type')
     if (logFilterType) {
-        logFilterType.addEventListener('change', () => loadLogs())
+        logFilterType.addEventListener('change', () => loadLogs(1))
     }
 
     const logFilterErrorOnly = document.getElementById('log-filter-error-only')
     if (logFilterErrorOnly) {
-        logFilterErrorOnly.addEventListener('change', () => loadLogs())
+        logFilterErrorOnly.addEventListener('change', () => loadLogs(1))
+    }
+
+    const btnLogsPrev = document.getElementById('btn-logs-prev')
+    if (btnLogsPrev) {
+        btnLogsPrev.addEventListener('click', () => {
+            if (logsCurrentPage > 1) {
+                loadLogs(logsCurrentPage - 1)
+            }
+        })
+    }
+
+    const btnLogsNext = document.getElementById('btn-logs-next')
+    if (btnLogsNext) {
+        btnLogsNext.addEventListener('click', () => {
+            if (logsCurrentPage < logsTotalPages) {
+                loadLogs(logsCurrentPage + 1)
+            }
+        })
     }
 
     const btnClearLogs = document.getElementById('btn-clear-logs')
     if (btnClearLogs) {
         btnClearLogs.addEventListener('click', async () => {
-            if (confirm('确定要清空全部请求日志流水记录吗？')) {
-                const res = await fetch(apiUrl('/api/logs/clear'), { method: 'POST' })
-                const data = await res.json()
-                if (data.success) {
-                    showToast('日志已清空')
-                    refreshLogsAndStats()
-                } else {
-                    showToast(data.error || '清空失败', true)
-                }
+            const confirm1 = confirm('确定要清空全部请求日志流水记录吗？')
+            if (!confirm1) return
+
+            const confirm2 = confirm('⚠️ 再次确认：清空后所有访问流水及节点流量监控历史将不可恢复！\n\n是否立即执行清空？')
+            if (!confirm2) return
+
+            const res = await fetch(apiUrl('/api/logs/clear'), { method: 'POST' })
+            const data = await res.json()
+            if (data.success) {
+                showToast('全部日志已清空')
+                refreshLogsAndStats()
+            } else {
+                showToast(data.error || '清空失败', true)
             }
         })
     }
