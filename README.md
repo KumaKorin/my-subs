@@ -17,7 +17,7 @@
 3. **独立分发展望**：
     - 暴露 `/sub?token=xxx`，支持客户端自动更新与标准 Clash 订阅流量响应头。
 4. **模块化与分离部署**：
-    - 前端 WebUI (`index.html`, `style.css`, `app.js`, `providers.js`) 与核心后端逻辑 (`worker.js`, `auth.js`, `crypto.js`, `kv.js`, `yaml.js`) 模块化分离。
+    - 前端 WebUI (`login.html`, `control.html`, `style.css`, `login.client.js`, `app.client.js`, `providers.client.js`) 与核心后端逻辑 (`worker.js`, `auth.js`, `crypto.js`, `kv.js`, `yaml.js`) 模块化分离。
 
 ---
 

@@ -1,112 +1,173 @@
-import { encryptAesGcm, decryptAesGcm } from './crypto.js'
+import { encryptAesGcm, decryptAesGcm, generateRandomHexToken } from './crypto.js'
 import DEFAULT_TEMPLATE from './default-template.yaml'
 
-const KEY_BASE_YAML = 'data:base_yaml'
-const KEY_PROVIDERS = 'data:providers_encrypted'
-const KEY_SUB_TOKEN = 'data:sub_token_encrypted'
-const KEY_SETTINGS = 'data:settings'
+// 全局/公共配置 Key
+const KEY_GLOBAL_BASE_YAML = 'data:global_base_yaml'
+const KEY_PROVIDERS_POOL = 'data:providers_pool_encrypted'
+const KEY_PROFILES = 'data:profiles_encrypted'
+
+// 兼容旧版单一配置 Key
+const LEGACY_KEY_BASE_YAML = 'data:base_yaml'
+const LEGACY_KEY_PROVIDERS = 'data:providers_encrypted'
+const LEGACY_KEY_SUB_TOKEN = 'data:sub_token_encrypted'
+const LEGACY_KEY_SETTINGS = 'data:settings'
 
 /**
- * 获取分发设置 (GitHub 代理开关等)
- * @returns {Promise<{proxyGithub: boolean, proxyGithubusercontent: boolean}>}
+ * 获取全局通用的 Global Base YAML 模板
  */
-export async function getSettings(env) {
-    const raw = await env.SUBS_KV.get(KEY_SETTINGS)
-    if (!raw) {
-        return { proxyGithub: false, proxyGithubusercontent: false }
-    }
-    try {
-        const parsed = JSON.parse(raw)
-        return {
-            proxyGithub: !!parsed.proxyGithub,
-            proxyGithubusercontent: !!parsed.proxyGithubusercontent
-        }
-    } catch (err) {
-        console.error('Failed to parse settings:', err)
-        return { proxyGithub: false, proxyGithubusercontent: false }
-    }
-}
-
-/**
- * 保存分发设置
- */
-export async function saveSettings(settings, env) {
-    const clean = {
-        proxyGithub: !!settings?.proxyGithub,
-        proxyGithubusercontent: !!settings?.proxyGithubusercontent
-    }
-    await env.SUBS_KV.put(KEY_SETTINGS, JSON.stringify(clean))
-}
-
-/**
- * 获取 Base YAML 基础配置
- * 若 KV 中尚未保存过，则使用 src/default-template.yaml 中的默认模板
- */
-export async function getBaseYaml(env) {
-    const yaml = await env.SUBS_KV.get(KEY_BASE_YAML)
+export async function getGlobalBaseYaml(env) {
+    let yaml = await env.SUBS_KV.get(KEY_GLOBAL_BASE_YAML)
     if (!yaml) {
-        return DEFAULT_TEMPLATE
+        // 尝试从旧版 Base YAML 迁移
+        const legacyYaml = await env.SUBS_KV.get(LEGACY_KEY_BASE_YAML)
+        yaml = legacyYaml || DEFAULT_TEMPLATE
+        await env.SUBS_KV.put(KEY_GLOBAL_BASE_YAML, yaml)
     }
     return yaml
 }
 
 /**
- * 保存 Base YAML
+ * 保存全局通用的 Global Base YAML
  */
-export async function saveBaseYaml(yamlString, env) {
-    await env.SUBS_KV.put(KEY_BASE_YAML, yamlString)
+export async function saveGlobalBaseYaml(yamlString, env) {
+    await env.SUBS_KV.put(KEY_GLOBAL_BASE_YAML, yamlString)
 }
 
 /**
- * 获取并解密 Proxy Providers 列表
- * @returns {Promise<Array>} 返回 provider 对象列表
+ * 获取全局 Provider 资源池 (AES 加密)
+ * @returns {Promise<Array>} Provider 对象列表 (包含 id, name, type, url, etc.)
  */
-export async function getProviders(env) {
-    const encrypted = await env.SUBS_KV.get(KEY_PROVIDERS)
-    if (!encrypted) return []
-
-    try {
-        const decryptedJson = await decryptAesGcm(encrypted, env.APP_SECRET)
-        return JSON.parse(decryptedJson)
-    } catch (err) {
-        console.error('Failed to decrypt providers:', err)
-        return []
+export async function getProvidersPool(env) {
+    const encrypted = await env.SUBS_KV.get(KEY_PROVIDERS_POOL)
+    if (encrypted) {
+        try {
+            const decryptedJson = await decryptAesGcm(encrypted, env.APP_SECRET)
+            const list = JSON.parse(decryptedJson)
+            // 确保每个 Provider 都有唯一 random uuid
+            let changed = false
+            for (const p of list) {
+                if (!p.id) {
+                    p.id = crypto.randomUUID()
+                    changed = true
+                }
+            }
+            if (changed) {
+                await saveProvidersPool(list, env)
+            }
+            return list
+        } catch (err) {
+            console.error('Failed to decrypt providers pool:', err)
+            return []
+        }
     }
+
+    // 尝试平滑迁移旧版 providers
+    const legacyEncrypted = await env.SUBS_KV.get(LEGACY_KEY_PROVIDERS)
+    if (legacyEncrypted) {
+        try {
+            const decryptedJson = await decryptAesGcm(legacyEncrypted, env.APP_SECRET)
+            const legacyList = JSON.parse(decryptedJson)
+            const migratedList = legacyList.map(p => ({
+                id: p.id || crypto.randomUUID(),
+                name: p.name || 'Provider',
+                type: p.type || 'http',
+                interval: p.interval || 36000,
+                healthCheckEnable: p.healthCheckEnable !== false,
+                healthCheckInterval: p.healthCheckInterval || 36000,
+                proxy: p.proxy || 'DIRECT',
+                url: p.url || '',
+                useWorkerProxy: !!p.useWorkerProxy,
+                path: p.path || ''
+            }))
+            await saveProvidersPool(migratedList, env)
+            return migratedList
+        } catch (err) {
+            console.error('Failed to migrate legacy providers:', err)
+        }
+    }
+
+    return []
 }
 
 /**
- * 加密并保存 Proxy Providers 列表
+ * 加密并保存全局 Provider 资源池
  */
-export async function saveProviders(providersArray, env) {
+export async function saveProvidersPool(providersArray, env) {
     const jsonStr = JSON.stringify(providersArray)
     const encrypted = await encryptAesGcm(jsonStr, env.APP_SECRET)
-    await env.SUBS_KV.put(KEY_PROVIDERS, encrypted)
+    await env.SUBS_KV.put(KEY_PROVIDERS_POOL, encrypted)
 }
 
 /**
- * 获取并解密对外订阅 Token
+ * 获取所有 Profile 列表 (AES 加密)
+ * @returns {Promise<Array>} Profile 对象列表
  */
-export async function getSubscriptionToken(env) {
-    const encrypted = await env.SUBS_KV.get(KEY_SUB_TOKEN)
-    if (!encrypted) {
-        // 若未初始化，生成默认随机 Token 并保存
-        const defaultToken = crypto.randomUUID().replace(/-/g, '')
-        await saveSubscriptionToken(defaultToken, env)
-        return defaultToken
+export async function getProfiles(env) {
+    const encrypted = await env.SUBS_KV.get(KEY_PROFILES)
+    if (encrypted) {
+        try {
+            const decryptedJson = await decryptAesGcm(encrypted, env.APP_SECRET)
+            return JSON.parse(decryptedJson)
+        } catch (err) {
+            console.error('Failed to decrypt profiles:', err)
+            return []
+        }
     }
 
-    try {
-        return await decryptAesGcm(encrypted, env.APP_SECRET)
-    } catch (err) {
-        console.error('Failed to decrypt subscription token:', err)
-        return null
+    // 若未初始化，尝试迁移旧版数据创建 Default Profile
+    const providers = await getProvidersPool(env)
+    const legacyTokenEncrypted = await env.SUBS_KV.get(LEGACY_KEY_SUB_TOKEN)
+    let token = ''
+    if (legacyTokenEncrypted) {
+        try {
+            token = await decryptAesGcm(legacyTokenEncrypted, env.APP_SECRET)
+        } catch {}
     }
+    if (!token) {
+        token = generateRandomHexToken(32) // 64-char hex
+    }
+
+    let legacySettings = { proxyGithub: false, proxyGithubusercontent: false }
+    const rawSettings = await env.SUBS_KV.get(LEGACY_KEY_SETTINGS)
+    if (rawSettings) {
+        try {
+            legacySettings = JSON.parse(rawSettings)
+        } catch {}
+    }
+
+    const defaultProfile = {
+        id: crypto.randomUUID(),
+        name: '默认配置',
+        token,
+        useGlobalYaml: true,
+        customBaseYaml: '',
+        enabledProviderIds: providers.map(p => p.id),
+        settings: {
+            proxyGithub: !!legacySettings.proxyGithub,
+            proxyGithubusercontent: !!legacySettings.proxyGithubusercontent
+        },
+        createdAt: Date.now()
+    }
+
+    const initialProfiles = [defaultProfile]
+    await saveProfiles(initialProfiles, env)
+    return initialProfiles
 }
 
 /**
- * 加密并保存对外订阅 Token
+ * 加密并保存所有 Profile 列表
  */
-export async function saveSubscriptionToken(token, env) {
-    const encrypted = await encryptAesGcm(token, env.APP_SECRET)
-    await env.SUBS_KV.put(KEY_SUB_TOKEN, encrypted)
+export async function saveProfiles(profilesArray, env) {
+    const jsonStr = JSON.stringify(profilesArray)
+    const encrypted = await encryptAesGcm(jsonStr, env.APP_SECRET)
+    await env.SUBS_KV.put(KEY_PROFILES, encrypted)
+}
+
+/**
+ * 根据 Token 查找对应的 Profile
+ */
+export async function getProfileByToken(token, env) {
+    if (!token) return null
+    const profiles = await getProfiles(env)
+    return profiles.find(p => p.token === token) || null
 }

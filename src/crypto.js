@@ -100,6 +100,17 @@ export async function hmacVerify(message, signatureBase64, secretKey) {
 }
 
 /**
+ * 生成 64 字符的随机 Hex 字符串 (32 字节高熵随机数)
+ */
+export function generateRandomHexToken(byteLength = 32) {
+    const bytes = new Uint8Array(byteLength)
+    crypto.getRandomValues(bytes)
+    return Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+}
+
+/**
  * 常数时间字符串比对，防止时序攻击
  */
 export function timingSafeEqual(a, b) {

@@ -15,7 +15,7 @@ export function buildProxyProvidersYaml(providers, proxyBaseUrl = '') {
     const lines = ['proxy-providers:']
 
     for (const p of providers) {
-        if (!p.name || !p.url) continue
+        if (!p.name || !p.url || p.disabled) continue
 
         const interval = p.interval || 36000
         const healthCheckInterval = p.healthCheckInterval || 36000
@@ -24,10 +24,10 @@ export function buildProxyProvidersYaml(providers, proxyBaseUrl = '') {
         const type = p.type || 'http'
         const path = p.path ? `    path: ${p.path}\n` : ''
 
-        // 如果开启了 useWorkerProxy 且传入了 proxyBaseUrl，则使用代理链接
+        // 如果开启了 useWorkerProxy 且传入了 proxyBaseUrl，则使用代理链接 (优先使用 Provider UUID)
         let targetUrl = p.url
         if (p.useWorkerProxy && proxyBaseUrl) {
-            targetUrl = `${proxyBaseUrl}${encodeURIComponent(p.name)}`
+            targetUrl = `${proxyBaseUrl}${encodeURIComponent(p.id || p.name)}`
         }
 
         lines.push(`  ${p.name}:`)

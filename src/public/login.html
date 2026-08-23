@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>登录 - Clash 订阅分发中心</title>
+        <link rel="stylesheet" href="./public/css/style.css" />
+    </head>
+    <body>
+        <div class="auth-container">
+            <div class="auth-card">
+                <h1>🚀 Clash Subs</h1>
+                <p>请输入管理员 Token 登录管理面板</p>
+                <form id="login-form">
+                    <input
+                        type="password"
+                        id="admin-token-input"
+                        class="input-field"
+                        placeholder="ADMIN_TOKEN"
+                        required
+                        autocomplete="current-password"
+                    />
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem">登 录</button>
+                </form>
+            </div>
+        </div>
+
+        <script type="module" src="./public/js/login.client.js"></script>
+    </body>
+</html>

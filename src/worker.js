@@ -1,19 +1,20 @@
 import { authenticateRequest, handleLogin, handleLogout } from './auth.js'
-import { timingSafeEqual } from './crypto.js'
+import { timingSafeEqual, generateRandomHexToken } from './crypto.js'
 import {
-    getBaseYaml,
-    saveBaseYaml,
-    getProviders,
-    saveProviders,
-    getSubscriptionToken,
-    saveSubscriptionToken,
-    getSettings,
-    saveSettings
+    getGlobalBaseYaml,
+    saveGlobalBaseYaml,
+    getProvidersPool,
+    saveProvidersPool,
+    getProfiles,
+    saveProfiles,
+    getProfileByToken
 } from './kv.js'
 import { assembleFinalYaml, rewriteGithubUrls } from './yaml.js'
 
 // 导入前端静态资源 (作为 Text 纯文本模块导入)
-import HTML_ADMIN from './public/index.html'
+import HTML_LOGIN from './public/login.html'
+import HTML_CONTROL from './public/control.html'
+import JS_LOGIN from './public/js/login.client.js'
 import JS_APP from './public/js/app.client.js'
 import JS_PROVIDERS from './public/js/providers.client.js'
 import CSS_STYLE from './public/css/style.css'
@@ -128,22 +129,33 @@ export default {
                 return new Response('Missing token parameter', { status: 400 })
             }
 
-            const currentSubToken = await getSubscriptionToken(env)
-            if (!currentSubToken || !timingSafeEqual(queryToken, currentSubToken)) {
+            const targetProfile = await getProfileByToken(queryToken, env)
+            if (!targetProfile) {
                 return new Response('Invalid subscription token', { status: 403 })
             }
 
-            const baseYaml = await getBaseYaml(env)
-            const providers = await getProviders(env)
-            const settings = await getSettings(env)
-            const proxyBaseUrl = `${currentOrigin}${prefix}/provider-proxy?token=${encodeURIComponent(queryToken)}&name=`
+            // 获取使用的 Base YAML (全局 or 自定义)
+            let baseYaml = ''
+            if (targetProfile.useGlobalYaml !== false) {
+                baseYaml = await getGlobalBaseYaml(env)
+            } else {
+                baseYaml = targetProfile.customBaseYaml || (await getGlobalBaseYaml(env))
+            }
+
+            // 获取启用的 Providers
+            const pool = await getProvidersPool(env)
+            const enabledIds = new Set(targetProfile.enabledProviderIds || [])
+            const activeProviders = pool.filter(p => enabledIds.has(p.id))
+
+            const settings = targetProfile.settings || {}
+            const proxyBaseUrl = `${currentOrigin}${prefix}/provider-proxy?token=${encodeURIComponent(queryToken)}&id=`
             const ghProxyBaseUrl = `${currentOrigin}${prefix}/gh-proxy?token=${encodeURIComponent(queryToken)}&url=`
-            let finalYaml = assembleFinalYaml(baseYaml, providers, proxyBaseUrl)
+            let finalYaml = assembleFinalYaml(baseYaml, activeProviders, proxyBaseUrl)
 
             // 根据设置重写 GitHub 相关 URL 为 Worker 代理链接
             finalYaml = rewriteGithubUrls(finalYaml, {
-                proxyGithub: settings.proxyGithub,
-                proxyGithubusercontent: settings.proxyGithubusercontent,
+                proxyGithub: !!settings.proxyGithub,
+                proxyGithubusercontent: !!settings.proxyGithubusercontent,
                 proxyUrlPrefix: ghProxyBaseUrl
             })
 
@@ -151,7 +163,7 @@ export default {
                 status: 200,
                 headers: {
                     'Content-Type': 'text/yaml; charset=utf-8',
-                    'Content-Disposition': 'inline; filename="clash_config.yaml"',
+                    'Content-Disposition': `inline; filename="${encodeURIComponent(targetProfile.name || 'clash')}.yaml"`,
                     'profile-update-interval': '24',
                     'subscription-userinfo': 'upload=0; download=0; total=1073741824000; expire=0'
                 }
@@ -159,24 +171,27 @@ export default {
         }
 
         // -------------------------------------------------------------
-        // 2. 公开接口：代理拉取指定 Provider 的内容 (/provider-proxy?token=xxx&name=xxx)
+        // 2. 公开接口：代理拉取指定 Provider 的内容 (/provider-proxy?token=xxx&id=xxx 或 name=xxx 兼容)
         // -------------------------------------------------------------
         if (pathname === '/provider-proxy') {
             const queryToken = url.searchParams.get('token')
-            const providerName = url.searchParams.get('name')
-            if (!queryToken || !providerName) {
-                return new Response('Missing token or name parameter', { status: 400 })
+            const providerId = url.searchParams.get('id') || url.searchParams.get('name')
+            if (!queryToken || !providerId) {
+                return new Response('Missing token or id parameter', { status: 400 })
             }
 
-            const currentSubToken = await getSubscriptionToken(env)
-            if (!currentSubToken || !timingSafeEqual(queryToken, currentSubToken)) {
+            const targetProfile = await getProfileByToken(queryToken, env)
+            if (!targetProfile) {
                 return new Response('Invalid subscription token', { status: 403 })
             }
 
-            const providers = await getProviders(env)
-            const targetProvider = providers.find(p => p.name === providerName)
+            const pool = await getProvidersPool(env)
+            const enabledIds = new Set(targetProfile.enabledProviderIds || [])
+            const targetProvider = pool.find(
+                p => (p.id === providerId || p.name === providerId) && enabledIds.has(p.id)
+            )
             if (!targetProvider || !targetProvider.url) {
-                return new Response('Provider not found', { status: 404 })
+                return new Response('Provider not found or not enabled in this profile', { status: 404 })
             }
 
             try {
@@ -214,8 +229,8 @@ export default {
                 return new Response('Missing token or url parameter', { status: 400 })
             }
 
-            const currentSubToken = await getSubscriptionToken(env)
-            if (!currentSubToken || !timingSafeEqual(queryToken, currentSubToken)) {
+            const targetProfile = await getProfileByToken(queryToken, env)
+            if (!targetProfile) {
                 return new Response('Invalid subscription token', { status: 403 })
             }
 
@@ -248,11 +263,45 @@ export default {
         }
 
         // -------------------------------------------------------------
-        // 2. 静态资源路由 (分开部署/模块化)
+        // 2. 页面与静态资源路由 (登录 /login 与 控制台 /control 物理隔离)
         // -------------------------------------------------------------
-        if (pathname === '/' || pathname === '/admin' || pathname === '/admin.html') {
-            // 将当前 prefix 注入到前端页面中，方便前端发起相对 API 请求
-            const injectedHtml = HTML_ADMIN.replace(
+        const isAuthed = await authenticateRequest(request, env)
+
+        // 根路径访问智能重定向
+        if (pathname === '/') {
+            const target = isAuthed ? `${prefix}/control` : `${prefix}/login`
+            return new Response(null, {
+                status: 302,
+                headers: { Location: target }
+            })
+        }
+
+        // 登录页面路由
+        if (pathname === '/login') {
+            if (isAuthed) {
+                return new Response(null, {
+                    status: 302,
+                    headers: { Location: `${prefix}/control` }
+                })
+            }
+            const injectedHtml = HTML_LOGIN.replace(
+                '<head>',
+                `<head>\n  <script>window.__BASE_PREFIX__ = ${JSON.stringify(prefix)};</script>`
+            )
+            return new Response(injectedHtml, {
+                headers: { 'Content-Type': 'text/html; charset=utf-8' }
+            })
+        }
+
+        // 控制面板页面路由 (严格鉴权，未登录直接 302 重定向到登录页，物理隔离不泄露页面 DOM)
+        if (pathname === '/control') {
+            if (!isAuthed) {
+                return new Response(null, {
+                    status: 302,
+                    headers: { Location: `${prefix}/login` }
+                })
+            }
+            const injectedHtml = HTML_CONTROL.replace(
                 '<head>',
                 `<head>\n  <script>window.__BASE_PREFIX__ = ${JSON.stringify(prefix)};</script>`
             )
@@ -267,13 +316,25 @@ export default {
             })
         }
 
+        if (pathname === '/public/js/login.client.js') {
+            return new Response(JS_LOGIN, {
+                headers: { 'Content-Type': 'application/javascript; charset=utf-8' }
+            })
+        }
+
         if (pathname === '/public/js/app.client.js') {
+            if (!isAuthed) {
+                return new Response('Unauthorized', { status: 401 })
+            }
             return new Response(JS_APP, {
                 headers: { 'Content-Type': 'application/javascript; charset=utf-8' }
             })
         }
 
         if (pathname === '/public/js/providers.client.js') {
+            if (!isAuthed) {
+                return new Response('Unauthorized', { status: 401 })
+            }
             return new Response(JS_PROVIDERS, {
                 headers: { 'Content-Type': 'application/javascript; charset=utf-8' }
             })
@@ -311,8 +372,6 @@ export default {
         // -------------------------------------------------------------
         // 4. 需要鉴权的 WebUI API
         // -------------------------------------------------------------
-        const isAuthed = await authenticateRequest(request, env)
-
         if (pathname.startsWith('/api/')) {
             if (!isAuthed) {
                 return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
@@ -321,83 +380,107 @@ export default {
             // 获取当前请求的对外 Origin (优先读取 CDN 请求头，其次 X-Forwarded-Proto / Host)
             const currentOrigin = getPublicOrigin(request, env, url)
 
-            // 获取当前所有配置数据
-            if (pathname === '/api/config' && request.method === 'GET') {
-                const baseYaml = await getBaseYaml(env)
-                const providers = await getProviders(env)
-                const subToken = await getSubscriptionToken(env)
-                const settings = await getSettings(env)
+            // ---------------------------------------------------------
+            // API: 获取全部完整数据 (Profile 列表、Provider 池、Global Base YAML)
+            // ---------------------------------------------------------
+            if (pathname === '/api/data' && request.method === 'GET') {
+                const globalBaseYaml = await getGlobalBaseYaml(env)
+                const providersPool = await getProvidersPool(env)
+                const profiles = await getProfiles(env)
 
                 return jsonResponse({
                     success: true,
                     data: {
-                        baseYaml,
-                        providers,
-                        subToken,
-                        settings,
-                        subUrl: `${currentOrigin}${prefix}/sub?token=${subToken}`
+                        globalBaseYaml,
+                        providersPool,
+                        profiles,
+                        publicOrigin: currentOrigin,
+                        prefix
                     }
                 })
             }
 
-            // 保存分发设置 (GitHub 代理开关)
-            if (pathname === '/api/config/settings' && request.method === 'POST') {
-                const { settings } = await request.json()
-                if (!settings || typeof settings !== 'object') {
-                    return jsonResponse({ success: false, error: 'Invalid settings' }, 400)
-                }
-                await saveSettings(settings, env)
-                return jsonResponse({ success: true })
-            }
-
-            // 保存 Base YAML
-            if (pathname === '/api/config/base-yaml' && request.method === 'POST') {
+            // 保存全局 Base YAML
+            if (pathname === '/api/global-base-yaml' && request.method === 'POST') {
                 const { yaml } = await request.json()
                 if (typeof yaml !== 'string') {
-                    return jsonResponse({ success: false, error: 'Invalid yaml content' }, 400)
+                    return jsonResponse({ success: false, error: 'Invalid YAML content' }, 400)
                 }
-                await saveBaseYaml(yaml, env)
+                await saveGlobalBaseYaml(yaml, env)
                 return jsonResponse({ success: true })
             }
 
-            // 保存 Proxy Providers (AES 加密存储)
-            if (pathname === '/api/config/providers' && request.method === 'POST') {
+            // 保存 Provider 资源池 (AES 加密)
+            if (pathname === '/api/providers-pool' && request.method === 'POST') {
                 const { providers } = await request.json()
                 if (!Array.isArray(providers)) {
                     return jsonResponse({ success: false, error: 'Providers must be an array' }, 400)
                 }
-                await saveProviders(providers, env)
-                return jsonResponse({ success: true })
-            }
-
-            // 更新 Subscription Token (AES 加密存储)
-            if (pathname === '/api/config/sub-token' && request.method === 'POST') {
-                const { token } = await request.json()
-                if (!token || typeof token !== 'string') {
-                    return jsonResponse({ success: false, error: 'Invalid token' }, 400)
+                // 为没有 ID 的 provider 分配 UUID
+                for (const p of providers) {
+                    if (!p.id) p.id = crypto.randomUUID()
                 }
-                await saveSubscriptionToken(token, env)
-                return jsonResponse({
-                    success: true,
-                    subUrl: `${currentOrigin}${prefix}/sub?token=${token}`
-                })
+                await saveProvidersPool(providers, env)
+                return jsonResponse({ success: true, providers })
             }
 
-            // 预览最终拼接生成的 YAML
+            // 保存所有 Profile 列表及配置 (AES 加密)
+            if (pathname === '/api/profiles' && request.method === 'POST') {
+                const { profiles } = await request.json()
+                if (!Array.isArray(profiles)) {
+                    return jsonResponse({ success: false, error: 'Profiles must be an array' }, 400)
+                }
+                for (const p of profiles) {
+                    if (!p.id) p.id = crypto.randomUUID()
+                    if (!p.token) p.token = generateRandomHexToken(32)
+                    if (!Array.isArray(p.enabledProviderIds)) p.enabledProviderIds = []
+                    if (p.useGlobalYaml === undefined) p.useGlobalYaml = true
+                    if (typeof p.customBaseYaml !== 'string') p.customBaseYaml = ''
+                    if (!p.settings || typeof p.settings !== 'object') {
+                        p.settings = { proxyGithub: false, proxyGithubusercontent: false }
+                    }
+                }
+                await saveProfiles(profiles, env)
+                return jsonResponse({ success: true, profiles })
+            }
+
+            // 预览指定 Profile 的最终分发 YAML (/api/preview?profileId=xxx)
             if (pathname === '/api/preview' && request.method === 'GET') {
-                const baseYaml = await getBaseYaml(env)
-                const providers = await getProviders(env)
-                const subToken = await getSubscriptionToken(env)
-                const settings = await getSettings(env)
-                const proxyBaseUrl = `${currentOrigin}${prefix}/provider-proxy?token=${encodeURIComponent(subToken || '')}&name=`
-                const ghProxyBaseUrl = `${currentOrigin}${prefix}/gh-proxy?token=${encodeURIComponent(subToken || '')}&url=`
-                let finalYaml = assembleFinalYaml(baseYaml, providers, proxyBaseUrl)
+                const profileId = url.searchParams.get('profileId')
+                const profiles = await getProfiles(env)
+                const targetProfile = profiles.find(p => p.id === profileId) || profiles[0]
+
+                if (!targetProfile) {
+                    return jsonResponse({ success: false, error: 'Profile not found' }, 404)
+                }
+
+                let baseYaml = ''
+                if (targetProfile.useGlobalYaml !== false) {
+                    baseYaml = await getGlobalBaseYaml(env)
+                } else {
+                    baseYaml = targetProfile.customBaseYaml || (await getGlobalBaseYaml(env))
+                }
+
+                const pool = await getProvidersPool(env)
+                const enabledIds = new Set(targetProfile.enabledProviderIds || [])
+                const activeProviders = pool.filter(p => enabledIds.has(p.id))
+
+                const token = targetProfile.token
+                const settings = targetProfile.settings || {}
+                const proxyBaseUrl = `${currentOrigin}${prefix}/provider-proxy?token=${encodeURIComponent(token || '')}&id=`
+                const ghProxyBaseUrl = `${currentOrigin}${prefix}/gh-proxy?token=${encodeURIComponent(token || '')}&url=`
+                let finalYaml = assembleFinalYaml(baseYaml, activeProviders, proxyBaseUrl)
                 finalYaml = rewriteGithubUrls(finalYaml, {
-                    proxyGithub: settings.proxyGithub,
-                    proxyGithubusercontent: settings.proxyGithubusercontent,
+                    proxyGithub: !!settings.proxyGithub,
+                    proxyGithubusercontent: !!settings.proxyGithubusercontent,
                     proxyUrlPrefix: ghProxyBaseUrl
                 })
-                return jsonResponse({ success: true, yaml: finalYaml })
+                return jsonResponse({
+                    success: true,
+                    yaml: finalYaml,
+                    profileName: targetProfile.name,
+                    providerCount: activeProviders.length
+                })
             }
 
             return jsonResponse({ success: false, error: 'Not Found' }, 404)

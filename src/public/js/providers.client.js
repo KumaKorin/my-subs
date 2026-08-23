@@ -1,5 +1,5 @@
 /**
- * Proxy Providers 可视化管理独立组件 (Section 1)
+ * Proxy Providers 资源池可视化管理独立组件
  */
 
 export class ProvidersComponent {
@@ -24,6 +24,9 @@ export class ProvidersComponent {
 
     addProvider() {
         this.providers.push({
+            id: crypto.randomUUID
+                ? crypto.randomUUID()
+                : `prov_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
             name: `Provider_${this.providers.length + 1}`,
             type: 'http',
             interval: 36000,
@@ -57,12 +60,12 @@ export class ProvidersComponent {
     render() {
         if (this.providers.length === 0) {
             this.container.innerHTML = `
-        <div style="text-align:center; padding: 2.5rem 1rem; color: var(--text-muted);">
-          <p>暂无 Proxy-Provider 订阅源</p>
-          <button class="btn btn-secondary" id="btn-add-first-provider" style="margin-top:1rem;">+ 添加第一个订阅源</button>
+        <div style="text-align:center; padding: 3rem 1rem; color: var(--text-muted);">
+          <p>暂无 Provider 订阅源定义</p>
+          <button class="btn btn-secondary" id="btn-add-first-pool-provider" style="margin-top:1rem;">+ 添加第一个订阅源</button>
         </div>
       `
-            const btnAdd = this.container.querySelector('#btn-add-first-provider')
+            const btnAdd = this.container.querySelector('#btn-add-first-pool-provider')
             if (btnAdd) {
                 btnAdd.addEventListener('click', () => this.addProvider())
             }
@@ -73,9 +76,19 @@ export class ProvidersComponent {
             .map(
                 (p, idx) => `
       <div class="provider-item" data-index="${idx}">
+        <div class="provider-header-row">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="provider-badge">${p.name || `Provider #${idx + 1}`}</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace;">ID: ${p.id || 'N/A'}</span>
+          </div>
+          <button class="btn btn-danger btn-delete-provider" data-index="${idx}" style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">
+            🗑️ 删除
+          </button>
+        </div>
+
         <div class="provider-row">
           <div class="field-group">
-            <label>Provider 名称 (Key):</label>
+            <label>Provider 名称 (Clash Proxy 组 Key):</label>
             <input type="text" class="input-field provider-name" value="${p.name || ''}" placeholder="例如: Name / LiangXin">
           </div>
           <div class="field-group">
@@ -86,8 +99,8 @@ export class ProvidersComponent {
 
         <div class="provider-row full">
           <div class="field-group">
-            <label>订阅链接 (URL):</label>
-            <input type="url" class="input-field provider-url" value="${p.url || ''}" placeholder="https://liangxin.xyz/api/v1/liangxin?OwO=xxx">
+            <label>外部订阅链接 (URL):</label>
+            <input type="url" class="input-field provider-url" value="${p.url || ''}" placeholder="https://example.com/api/v1/client/subscribe?token=xxx">
           </div>
         </div>
 
@@ -114,10 +127,6 @@ export class ProvidersComponent {
             </select>
           </div>
         </div>
-
-        <div class="provider-actions">
-          <button class="btn btn-danger btn-delete-provider" data-index="${idx}">删除此源</button>
-        </div>
       </div>
     `
             )
@@ -133,6 +142,8 @@ export class ProvidersComponent {
 
             itemEl.querySelector('.provider-name').addEventListener('input', e => {
                 this.updateProvider(idx, 'name', e.target.value)
+                const badge = itemEl.querySelector('.provider-badge')
+                if (badge) badge.textContent = e.target.value || `Provider #${idx + 1}`
             })
 
             itemEl.querySelector('.provider-proxy').addEventListener('input', e => {
@@ -156,7 +167,10 @@ export class ProvidersComponent {
             })
 
             itemEl.querySelector('.btn-delete-provider').addEventListener('click', () => {
-                this.removeProvider(idx)
+                const prov = this.providers[idx]
+                if (confirm(`确定要从资源池中删除订阅源「${prov.name || '未命名'}」吗？`)) {
+                    this.removeProvider(idx)
+                }
             })
         })
     }
