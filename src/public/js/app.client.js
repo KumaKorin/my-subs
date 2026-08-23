@@ -1,7 +1,93 @@
 import { ProvidersComponent } from './providers.client.js'
+import { EditorView, basicSetup } from 'https://esm.sh/codemirror@6.0.1'
+import { yaml } from 'https://esm.sh/@codemirror/lang-yaml@6.1.1'
+import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6.1.2'
+import { linter, lintGutter } from 'https://esm.sh/@codemirror/lint@6.8.4'
+import { EditorState } from 'https://esm.sh/@codemirror/state@6.5.2'
 
 let providersComp = null
 let currentBaseYaml = ''
+let baseYamlEditorView = null
+let previewEditorView = null
+
+// YAML 语法检查诊断扩展 (基于 window.jsyaml)
+const yamlLinter = linter(view => {
+    const doc = view.state.doc.toString()
+    const diagnostics = []
+    const statusEl = document.getElementById('yaml-lint-status')
+
+    if (!doc.trim()) {
+        if (statusEl) {
+            statusEl.textContent = ''
+            statusEl.style.display = 'none'
+        }
+        return diagnostics
+    }
+
+    if (!window.jsyaml) {
+        return diagnostics
+    }
+
+    try {
+        window.jsyaml.load(doc)
+        if (statusEl) {
+            statusEl.style.display = 'inline-flex'
+            statusEl.textContent = '✅ YAML 格式正确'
+            statusEl.style.color = 'var(--success)'
+        }
+    } catch (e) {
+        if (statusEl) {
+            statusEl.style.display = 'inline-flex'
+            const lineNum = e.mark?.line !== undefined ? e.mark.line + 1 : '?'
+            statusEl.textContent = `❌ 第 ${lineNum} 行语法错误`
+            statusEl.style.color = 'var(--danger)'
+        }
+
+        if (e.mark) {
+            const lineIndex = Math.min(Math.max(1, e.mark.line + 1), view.state.doc.lines)
+            const lineObj = view.state.doc.line(lineIndex)
+            const from = Math.min(lineObj.from + (e.mark.column || 0), lineObj.to)
+            const to = Math.max(from + 1, lineObj.to)
+
+            diagnostics.push({
+                from,
+                to,
+                severity: 'error',
+                message: e.reason || e.message
+            })
+        }
+    }
+    return diagnostics
+})
+
+// 创建 CodeMirror 实例
+function createEditor(container, doc = '', readOnly = false) {
+    const extensions = [basicSetup, yaml(), oneDark, EditorView.lineWrapping]
+
+    if (readOnly) {
+        extensions.push(EditorState.readOnly.of(true))
+    } else {
+        extensions.push(lintGutter(), yamlLinter)
+    }
+
+    return new EditorView({
+        doc,
+        extensions,
+        parent: container
+    })
+}
+
+// 设置编辑器内容
+function setEditorContent(editorView, content) {
+    if (!editorView) return
+    editorView.dispatch({
+        changes: {
+            from: 0,
+            to: editorView.state.doc.length,
+            insert: content || ''
+        }
+    })
+}
 
 // 获取注入的 Base Prefix
 const basePrefix = window.__BASE_PREFIX__ || ''
@@ -56,11 +142,15 @@ function renderDashboard(data) {
     if (subUrlInput) subUrlInput.value = data.subUrl || ''
     if (subTokenInput) subTokenInput.value = data.subToken || ''
 
-    // 2. Base YAML 基础配置 (Section 2)
-    const yamlTextarea = document.getElementById('base-yaml-textarea')
-    if (yamlTextarea) {
-        yamlTextarea.value = data.baseYaml || ''
-        currentBaseYaml = data.baseYaml || ''
+    // 2. Base YAML 基础配置 (Section 2 - CodeMirror 编辑器)
+    currentBaseYaml = data.baseYaml || ''
+    const editorContainer = document.getElementById('base-yaml-editor')
+    if (editorContainer) {
+        if (!baseYamlEditorView) {
+            baseYamlEditorView = createEditor(editorContainer, currentBaseYaml, false)
+        } else {
+            setEditorContent(baseYamlEditorView, currentBaseYaml)
+        }
     }
 
     // 3. Proxy Providers 组件挂载 (Section 1)
@@ -149,7 +239,21 @@ function bindGlobalEvents() {
     const btnSaveYaml = document.getElementById('btn-save-yaml')
     if (btnSaveYaml) {
         btnSaveYaml.addEventListener('click', async () => {
-            const yaml = document.getElementById('base-yaml-textarea').value
+            const yaml = baseYamlEditorView ? baseYamlEditorView.state.doc.toString() : ''
+
+            // 语法校验拦截
+            if (window.jsyaml && yaml.trim()) {
+                try {
+                    window.jsyaml.load(yaml)
+                } catch (err) {
+                    const lineInfo = err.mark?.line !== undefined ? ` (第 ${err.mark.line + 1} 行)` : ''
+                    const confirmSave = confirm(
+                        `检测到 YAML 存在语法错误${lineInfo}：\n${err.reason || err.message}\n\n确定仍要强制保存吗？`
+                    )
+                    if (!confirmSave) return
+                }
+            }
+
             const res = await fetch(apiUrl('/api/config/base-yaml'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -230,15 +334,19 @@ function bindGlobalEvents() {
     const btnPreview = document.getElementById('btn-preview-yaml')
     const previewModal = document.getElementById('preview-modal')
     const btnCloseModal = document.getElementById('btn-close-modal')
-    const previewContent = document.getElementById('preview-content')
+    const previewContainer = document.getElementById('preview-editor')
 
     if (btnPreview) {
         btnPreview.addEventListener('click', async () => {
             const res = await fetch(apiUrl('/api/preview'))
             const data = await res.json()
             if (data.success) {
-                previewContent.textContent = data.yaml
                 previewModal.style.display = 'flex'
+                if (!previewEditorView && previewContainer) {
+                    previewEditorView = createEditor(previewContainer, data.yaml || '', true)
+                } else if (previewEditorView) {
+                    setEditorContent(previewEditorView, data.yaml || '')
+                }
             }
         })
     }

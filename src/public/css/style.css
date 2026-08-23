@@ -212,12 +212,46 @@ header {
     border-color: var(--primary);
 }
 
-textarea.input-field {
-    font-family: 'Fira Code', monospace, 'Courier New';
+/* CodeMirror 编辑器容器 */
+.editor-container {
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    background: #0f172a;
+    overflow: hidden;
+    min-height: 420px;
+    height: 520px;
+    display: flex;
+    flex-direction: column;
+}
+
+.preview-editor-container {
+    min-height: 500px;
+    height: 65vh;
+}
+
+.editor-container .cm-editor {
+    height: 100%;
+    font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
     font-size: 0.85rem;
-    resize: vertical;
-    min-height: 380px;
-    line-height: 1.4;
+}
+
+.editor-container .cm-editor.cm-focused {
+    outline: none;
+}
+
+.editor-container .cm-scroller {
+    overflow: auto;
+    font-family: inherit;
+}
+
+/* 语法校验状态指示标签 */
+.lint-status-badge {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(15, 23, 42, 0.6);
+    display: inline-flex;
+    align-items: center;
 }
 
 /* Provider List Card Styling */

@@ -5,6 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Clash Subscription Manager</title>
         <link rel="stylesheet" href="./public/css/style.css" />
+        <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     </head>
     <body>
         <!-- 1. 登录面板 (鉴权未通过时显示) -->
@@ -101,16 +102,15 @@
                 <div class="section-card">
                     <div class="section-header">
                         <div class="section-title"><span>📝</span> Base Clash YAML (基础规则与组)</div>
-                        <button id="btn-save-yaml" class="btn btn-primary">💾 保存 Base YAML</button>
+                        <div style="display: flex; gap: 0.5rem; align-items: center">
+                            <span id="yaml-lint-status" class="lint-status-badge"></span>
+                            <button id="btn-save-yaml" class="btn btn-primary">💾 保存 Base YAML</button>
+                        </div>
                     </div>
                     <div style="margin-bottom: 0.5rem; font-size: 0.8rem; color: var(--text-muted)">
                         提示：最终订阅将在头部自动插入左侧配置好的 <code>proxy-providers</code>。
                     </div>
-                    <textarea
-                        id="base-yaml-textarea"
-                        class="input-field"
-                        placeholder="输入 Clash 基础配置 (rules, proxy-groups 等)..."
-                    ></textarea>
+                    <div id="base-yaml-editor" class="editor-container"></div>
                 </div>
             </div>
         </div>
@@ -123,7 +123,7 @@
                     <button id="btn-close-modal" class="btn btn-secondary">关闭</button>
                 </div>
                 <div class="modal-body">
-                    <pre id="preview-content"></pre>
+                    <div id="preview-editor" class="editor-container preview-editor-container"></div>
                 </div>
             </div>
         </div>
