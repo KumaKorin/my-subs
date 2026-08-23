@@ -579,3 +579,242 @@ header {
 .settings-hint code {
     color: #38bdf8;
 }
+
+/* 迁移提示横幅 */
+.migration-alert {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(59, 130, 246, 0.15));
+    border: 1px solid var(--primary);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+}
+
+.migration-alert-content {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+/* 统计卡片网格 */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.stat-title {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.stat-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-main);
+    font-family: monospace;
+}
+
+.stat-danger {
+    color: var(--danger) !important;
+}
+
+/* 日志工具栏与表格 */
+.logs-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.logs-table-wrapper {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--card-border);
+}
+
+.logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 0.85rem;
+}
+
+.logs-table th {
+    background: #0f172a;
+    padding: 0.75rem 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--card-border);
+    white-space: nowrap;
+}
+
+.logs-table td {
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    vertical-align: middle;
+}
+
+.logs-table tr:hover {
+    background: rgba(30, 41, 59, 0.6);
+}
+
+.logs-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Badges & Pills */
+.log-badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.log-badge-sub {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.log-badge-provider {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.log-badge-gh {
+    background: rgba(168, 85, 247, 0.2);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.status-pill {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: monospace;
+}
+
+.status-pill-ok {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+}
+
+.status-pill-err {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.country-tag {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    background: #334155;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-right: 0.3rem;
+}
+
+.log-user-info {
+    font-size: 0.72rem;
+    color: #38bdf8;
+    margin-top: 0.2rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+}
+
+.log-error-msg {
+    font-size: 0.72rem;
+    color: var(--danger);
+    margin-top: 0.2rem;
+}
+
+/* Provider 内部健康度与流量进度条 */
+.health-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+}
+
+.health-ok {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+}
+
+.health-err {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+}
+
+.health-idle {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-muted);
+}
+
+.status-dot-ok {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+}
+
+.status-dot-err {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
+}
+
+.provider-traffic-box {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    padding: 0.45rem 0.65rem;
+    margin: 0.5rem 0;
+}
+
+.traffic-progress-bg {
+    background: #334155;
+    height: 4px;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.traffic-progress-bar {
+    background: linear-gradient(90deg, #3b82f6, #10b981);
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+

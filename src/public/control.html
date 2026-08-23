@@ -10,6 +10,22 @@
     </head>
     <body>
         <div id="app-section" class="app-container">
+            <!-- 迁移提示横幅 (当检测到 KV 有历史数据且 D1 尚未导入时显示) -->
+            <div id="migration-banner" class="migration-alert" style="display: none">
+                <div class="migration-alert-content">
+                    <i class="ri-database-2-line" style="font-size: 1.4rem; color: var(--primary)"></i>
+                    <div>
+                        <div style="font-weight: 600">检测到现有 KV 中有配置数据，D1 数据库尚未导入</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted)">
+                            点击一键迁移将现有 Base YAML、Providers 和 Profiles 完整同步到 D1 主数据库中。
+                        </div>
+                    </div>
+                </div>
+                <button id="btn-start-migration" class="btn btn-primary" style="padding: 0.4rem 1rem">
+                    <i class="ri-upload-cloud-line"></i> 一键迁移至 D1
+                </button>
+            </div>
+
             <header>
                 <div class="logo-area">
                     <h1><i class="ri-flashlight-fill" style="color: var(--primary)"></i> Clash 订阅分发中心</h1>
@@ -34,6 +50,9 @@
                 </button>
                 <button class="nav-tab" data-tab="tab-providers">
                     <i class="ri-archive-line"></i> Provider 资源池管理
+                </button>
+                <button class="nav-tab" data-tab="tab-logs">
+                    <i class="ri-history-line"></i> 请求日志与排障
                 </button>
             </div>
 
@@ -245,6 +264,80 @@
                         style="flex: 1; overflow-y: auto; max-height: 65vh; padding-right: 0.25rem"
                     >
                         <!-- 动态注入 Provider 列表编辑组件 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: 请求日志与排障中心 -->
+            <div id="tab-logs" class="tab-pane">
+                <!-- 统计数据卡片 -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-title"><i class="ri-calendar-todo-line"></i> 今日请求总量</div>
+                        <div class="stat-value" id="stat-today-requests">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title"><i class="ri-error-warning-line"></i> 今日请求异常</div>
+                        <div class="stat-value stat-danger" id="stat-today-errors">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title"><i class="ri-file-download-line"></i> /sub 分发次数</div>
+                        <div class="stat-value" id="stat-sub-count">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title"><i class="ri-route-line"></i> /provider 代理次数</div>
+                        <div class="stat-value" id="stat-provider-count">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title"><i class="ri-github-line"></i> /gh 规则代理次数</div>
+                        <div class="stat-value" id="stat-gh-count">0</div>
+                    </div>
+                </div>
+
+                <div class="section-card" style="margin-top: 1.25rem">
+                    <div class="section-header" style="flex-wrap: wrap; gap: 0.75rem">
+                        <div class="section-title"><i class="ri-history-line"></i> 实时请求日志流水</div>
+                        <div class="logs-toolbar">
+                            <select id="log-filter-type" class="input-field" style="margin-bottom: 0; width: 140px; padding: 0.4rem 0.6rem">
+                                <option value="all">全部请求类型</option>
+                                <option value="sub">/sub (分发)</option>
+                                <option value="provider-proxy">/provider-proxy (节点)</option>
+                                <option value="gh-proxy">/gh-proxy (规则)</option>
+                            </select>
+                            <label class="switch-item" style="margin-bottom: 0; font-size: 0.85rem">
+                                <input type="checkbox" id="log-filter-error-only" />
+                                <span class="switch-label">仅看异常 (&ge;400)</span>
+                            </label>
+                            <button id="btn-refresh-logs" class="btn btn-secondary" style="padding: 0.4rem 0.8rem">
+                                <i class="ri-refresh-line"></i> 刷新
+                            </button>
+                            <button id="btn-clear-logs" class="btn btn-danger" style="padding: 0.4rem 0.8rem">
+                                <i class="ri-delete-bin-line"></i> 清空日志
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="logs-table-wrapper">
+                        <table class="logs-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 140px">时间</th>
+                                    <th style="width: 130px">类型</th>
+                                    <th style="width: 80px">状态</th>
+                                    <th style="width: 80px">耗时</th>
+                                    <th>目标 / 资源</th>
+                                    <th style="width: 160px">客户端 IP / 地区</th>
+                                    <th>客户端 UA / 流量信息</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-tbody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem">
+                                        加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

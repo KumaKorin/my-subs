@@ -2,12 +2,15 @@
     "name": "mysubs-clash-worker",
     "version": "1.0.0",
     "description": "Cloudflare Worker for Clash Subscription Management with WebUI and AES Encryption",
+    "type": "module",
     "main": "src/worker.js",
     "scripts": {
         "dev": "wrangler dev",
-        "deploy": "wrangler deploy"
+        "deploy": "wrangler deploy",
+        "migrate": "node scripts/migrate.js"
     },
     "devDependencies": {
         "wrangler": "^3.100.0"
     }
 }
+

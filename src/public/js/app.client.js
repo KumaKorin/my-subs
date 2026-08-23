@@ -10,7 +10,8 @@ let appData = {
     providersPool: [],
     profiles: [],
     publicOrigin: '',
-    prefix: ''
+    prefix: '',
+    hasD1: false
 }
 
 let currentProfileId = null
@@ -18,6 +19,7 @@ let customYamlEditorView = null
 let globalYamlEditorView = null
 let previewEditorView = null
 let poolProvidersComp = null
+let logsTimer = null
 
 // 生成 64 字符随机 Hex Token
 function generateRandomHex(byteLength = 32) {
@@ -150,12 +152,27 @@ async function initApp() {
             }
 
             renderAll()
+            checkMigrationStatus()
         } else {
-            window.location.href = `${basePrefix}/login`
+            showToast(`加载数据失败: ${resData.error || '未知错误'}`, true)
         }
     } catch (e) {
-        window.location.href = `${basePrefix}/login`
+        showToast(`网络或数据异常: ${e.message}`, true)
     }
+}
+
+// 检查是否需要迁移提示
+async function checkMigrationStatus() {
+    try {
+        const res = await fetch(apiUrl('/api/migration-status'))
+        const data = await res.json()
+        const banner = document.getElementById('migration-banner')
+        if (banner && data.canMigrate) {
+            banner.style.display = 'flex'
+        } else if (banner) {
+            banner.style.display = 'none'
+        }
+    } catch {}
 }
 
 // 渲染全部界面
@@ -264,10 +281,20 @@ function renderProfileProvidersList(profile) {
     container.innerHTML = pool
         .map(p => {
             const isChecked = enabledSet.has(p.id)
+            let statusDot = ''
+            if (p.lastStatus) {
+                statusDot = p.lastStatus >= 200 && p.lastStatus < 300 
+                    ? '<span class="status-dot-ok" title="200 OK"></span>' 
+                    : '<span class="status-dot-err" title="异常"></span>'
+            }
+
             return `
                 <div class="profile-provider-checkbox-item ${isChecked ? 'checked' : ''}" data-provider-id="${p.id}">
                     <div class="profile-provider-info">
-                        <span class="profile-provider-name">${p.name || '未命名源'}</span>
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                            ${statusDot}
+                            <span class="profile-provider-name">${p.name || '未命名源'}</span>
+                        </div>
                         <span class="profile-provider-url" title="${p.url || ''}">${p.url || '未配置 URL'}</span>
                     </div>
                     <label class="switch-item">
@@ -278,7 +305,6 @@ function renderProfileProvidersList(profile) {
         })
         .join('')
 
-    // 绑定 Profile 内 Provider 开关事件 (即时修改内存，待点击保存 Profile 时提交)
     container.querySelectorAll('.profile-provider-checkbox-item').forEach(el => {
         const provId = el.getAttribute('data-provider-id')
         const toggle = el.querySelector('.profile-provider-toggle')
@@ -310,6 +336,135 @@ function renderPoolProviders() {
     poolProvidersComp.setProviders(appData.providersPool || [])
 }
 
+// -------------------------------------------------------------
+// Tab 3: 请求日志与统计
+// -------------------------------------------------------------
+
+async function loadStats() {
+    try {
+        const res = await fetch(apiUrl('/api/stats'))
+        const { data } = await res.json()
+        if (!data) return
+
+        const elTodayReq = document.getElementById('stat-today-requests')
+        const elTodayErr = document.getElementById('stat-today-errors')
+        const elSubCount = document.getElementById('stat-sub-count')
+        const elProvCount = document.getElementById('stat-provider-count')
+        const elGhCount = document.getElementById('stat-gh-count')
+
+        if (elTodayReq) elTodayReq.textContent = data.todayRequests || 0
+        if (elTodayErr) elTodayErr.textContent = data.todayErrors || 0
+        if (elSubCount) elSubCount.textContent = data.todayTypeBreakdown?.['sub'] || 0
+        if (elProvCount) elProvCount.textContent = data.todayTypeBreakdown?.['provider-proxy'] || 0
+        if (elGhCount) elGhCount.textContent = data.todayTypeBreakdown?.['gh-proxy'] || 0
+    } catch {}
+}
+
+async function loadLogs() {
+    const tbody = document.getElementById('logs-tbody')
+    if (!tbody) return
+
+    const typeSelect = document.getElementById('log-filter-type')
+    const errorOnlyCheckbox = document.getElementById('log-filter-error-only')
+
+    const type = typeSelect ? typeSelect.value : 'all'
+    const errorOnly = errorOnlyCheckbox && errorOnlyCheckbox.checked ? '1' : '0'
+
+    try {
+        const res = await fetch(apiUrl(`/api/logs?limit=50&type=${encodeURIComponent(type)}&errorOnly=${errorOnly}`))
+        const result = await res.json()
+        const { logs, total, hasD1 } = result.data || {}
+
+        if (!hasD1 && logs?.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                        <i class="ri-database-2-line" style="font-size: 1.5rem; display:block; margin-bottom: 0.5rem;"></i>
+                        未绑定 Cloudflare D1 数据库，日志功能暂未激活。<br>
+                        请在 <code>wrangler.toml</code> 中添加 <code>[[d1_databases]]</code> 绑定。
+                    </td>
+                </tr>
+            `
+            return
+        }
+
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                        暂无请求日志记录
+                    </td>
+                </tr>
+            `
+            return
+        }
+
+        tbody.innerHTML = logs
+            .map(log => {
+                let typeBadge = `<span class="log-badge log-badge-sub">/sub 分发</span>`
+                if (log.request_type === 'provider-proxy') {
+                    typeBadge = `<span class="log-badge log-badge-provider">/provider 代理</span>`
+                } else if (log.request_type === 'gh-proxy') {
+                    typeBadge = `<span class="log-badge log-badge-gh">/gh 规则代理</span>`
+                }
+
+                let statusBadge = `<span class="status-pill status-pill-ok">${log.status_code}</span>`
+                if (log.status_code >= 400) {
+                    statusBadge = `<span class="status-pill status-pill-err">${log.status_code}</span>`
+                }
+
+                const durationStr = log.duration_ms !== null ? `${log.duration_ms} ms` : '-'
+                const targetDisplay = log.target_name || log.target_id || '-'
+
+                let extraInfo = ''
+                if (log.user_info) {
+                    extraInfo += `<div class="log-user-info" title="${log.user_info}"><i class="ri-pie-chart-line"></i> ${log.user_info}</div>`
+                }
+                if (log.error_message) {
+                    extraInfo += `<div class="log-error-msg"><i class="ri-error-warning-line"></i> ${log.error_message}</div>`
+                }
+
+                return `
+                    <tr>
+                        <td style="font-family: monospace; font-size: 0.78rem; color: var(--text-muted); white-space: nowrap">
+                            ${log.created_at || '-'}
+                        </td>
+                        <td>${typeBadge}</td>
+                        <td>${statusBadge}</td>
+                        <td style="font-family: monospace; font-size: 0.8rem">${durationStr}</td>
+                        <td style="font-weight: 500; font-size: 0.85rem; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title="${targetDisplay}">
+                            ${targetDisplay}
+                        </td>
+                        <td>
+                            <span class="country-tag">${log.client_country || 'XX'}</span>
+                            <span style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted)">${log.client_ip || '-'}</span>
+                        </td>
+                        <td>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title="${log.user_agent || ''}">
+                                ${log.user_agent || '-'}
+                            </div>
+                            ${extraInfo}
+                        </td>
+                    </tr>
+                `
+            })
+            .join('')
+    } catch (e) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; color: var(--danger); padding: 2rem;">
+                    获取日志失败: ${e.message}
+                </td>
+            </tr>
+        `
+    }
+}
+
+function refreshLogsAndStats() {
+    loadStats()
+    loadLogs()
+}
+
 // Tab 切换
 function switchTab(tabId) {
     document.querySelectorAll('.nav-tab').forEach(t => {
@@ -327,6 +482,18 @@ function switchTab(tabId) {
             p.classList.remove('active')
         }
     })
+
+    if (tabId === 'tab-logs') {
+        refreshLogsAndStats()
+        if (!logsTimer) {
+            logsTimer = setInterval(refreshLogsAndStats, 10000)
+        }
+    } else {
+        if (logsTimer) {
+            clearInterval(logsTimer)
+            logsTimer = null
+        }
+    }
 }
 
 // 收集当前 Profile 界面表单数据同步回 Profile 对象
@@ -448,7 +615,6 @@ function bindGlobalEvents() {
             const profile = collectCurrentProfileFormData()
             if (!profile) return
 
-            // 若使用自定义 YAML，校验 YAML 语法
             if (!profile.useGlobalYaml && window.jsyaml && profile.customBaseYaml.trim()) {
                 try {
                     window.jsyaml.load(profile.customBaseYaml)
@@ -469,7 +635,7 @@ function bindGlobalEvents() {
 
             const result = await res.json()
             if (result.success) {
-                showToast(`Profile「${profile.name}」配置已加密保存`)
+                showToast(`Profile「${profile.name}」配置已保存`)
                 renderProfileSelect()
             } else {
                 showToast(result.error || '保存失败', true)
@@ -544,7 +710,7 @@ function bindGlobalEvents() {
             const result = await res.json()
             if (result.success) {
                 appData.providersPool = result.providers || providers
-                showToast('Provider 资源池已加密保存')
+                showToast('Provider 资源池已保存')
             } else {
                 showToast(result.error || '保存失败', true)
             }
@@ -648,6 +814,69 @@ function bindGlobalEvents() {
     if (btnCloseModal) {
         btnCloseModal.addEventListener('click', () => {
             previewModal.style.display = 'none'
+        })
+    }
+
+    // 13. 日志与统计操作
+    const btnRefreshLogs = document.getElementById('btn-refresh-logs')
+    if (btnRefreshLogs) {
+        btnRefreshLogs.addEventListener('click', () => {
+            refreshLogsAndStats()
+            showToast('已刷新最新请求日志')
+        })
+    }
+
+    const logFilterType = document.getElementById('log-filter-type')
+    if (logFilterType) {
+        logFilterType.addEventListener('change', () => loadLogs())
+    }
+
+    const logFilterErrorOnly = document.getElementById('log-filter-error-only')
+    if (logFilterErrorOnly) {
+        logFilterErrorOnly.addEventListener('change', () => loadLogs())
+    }
+
+    const btnClearLogs = document.getElementById('btn-clear-logs')
+    if (btnClearLogs) {
+        btnClearLogs.addEventListener('click', async () => {
+            if (confirm('确定要清空全部请求日志流水记录吗？')) {
+                const res = await fetch(apiUrl('/api/logs/clear'), { method: 'POST' })
+                const data = await res.json()
+                if (data.success) {
+                    showToast('日志已清空')
+                    refreshLogsAndStats()
+                } else {
+                    showToast(data.error || '清空失败', true)
+                }
+            }
+        })
+    }
+
+    // 14. 一键迁移至 D1
+    const btnStartMigration = document.getElementById('btn-start-migration')
+    if (btnStartMigration) {
+        btnStartMigration.addEventListener('click', async () => {
+            if (confirm('确定开始将 KV 中的历史配置数据无缝同步至 D1 数据库吗？')) {
+                btnStartMigration.disabled = true
+                btnStartMigration.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> 迁移中...'
+                try {
+                    const res = await fetch(apiUrl('/api/migrate-kv-to-d1'), { method: 'POST' })
+                    const result = await res.json()
+                    if (result.success) {
+                        alert(`迁移完成！\nProviders: ${result.report?.providersCount || 0} 个\nProfiles: ${result.report?.profilesCount || 0} 个\nBase YAML: ${result.report?.baseYamlMigrated ? '已同步' : '默认'}`)
+                        const banner = document.getElementById('migration-banner')
+                        if (banner) banner.style.display = 'none'
+                        initApp()
+                    } else {
+                        showToast(result.error || '迁移失败', true)
+                    }
+                } catch (e) {
+                    showToast(`迁移请求异常: ${e.message}`, true)
+                } finally {
+                    btnStartMigration.disabled = false
+                    btnStartMigration.innerHTML = '<i class="ri-upload-cloud-line"></i> 一键迁移至 D1'
+                }
+            }
         })
     }
 }
