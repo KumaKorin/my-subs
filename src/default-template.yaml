@@ -113,7 +113,7 @@ proxies:
       type: direct
       udp: true
 
-# 锚点
+# 锚点：通用应用策略组继承
 pr:
     &pr {
         type: select,
@@ -121,21 +121,23 @@ pr:
             [
                 👉 节点选择,
                 ♻️ 自动选择,
-                6️⃣ IPV6,
-                🇸🇬♻️ 新加坡自动,
-                🇭🇰♻️ 香港自动,
-                🇹🇼 ♻️ 台湾自动,
-                🇯🇵♻️ 日本自动,
-                🇺🇲♻️ 美国自动,
-                🇸🇬新加坡节点,
+                🇭🇰 自动选择,
+                🇹🇼 自动选择,
+                🇯🇵 自动选择,
+                🇸🇬 自动选择,
+                🇺🇸 自动选择,
+                🇸🇬 原生自动,
+                🇺🇸 原生自动,
                 🇭🇰 香港节点,
                 🇹🇼 台湾节点,
                 🇯🇵 日本节点,
-                🇺🇲美国节点,
-                🌐 指定节点,
+                🇸🇬 新加坡节点,
+                🇺🇸 美国节点,
+                🌐 全部节点,
                 ➡️ Direct
             ]
     }
+
 # 策略组
 proxy-groups:
     - {
@@ -143,132 +145,115 @@ proxy-groups:
           type: select,
           proxies:
               [
-                  🌐 指定节点,
                   ♻️ 自动选择,
-                  🇸🇬♻️ 新加坡自动,
-                  🇭🇰♻️ 香港自动,
-                  🇹🇼 ♻️ 台湾自动,
-                  🇯🇵♻️ 日本自动,
-                  🇺🇲♻️ 美国自动,
-                  🇸🇬新加坡节点,
+                  🇭🇰 自动选择,
+                  🇹🇼 自动选择,
+                  🇯🇵 自动选择,
+                  🇸🇬 自动选择,
+                  🇺🇸 自动选择,
+                  🇸🇬 原生自动,
+                  🇺🇸 原生自动,
                   🇭🇰 香港节点,
                   🇹🇼 台湾节点,
                   🇯🇵 日本节点,
-                  🇺🇲美国节点,
+                  🇸🇬 新加坡节点,
+                  🇺🇸 美国节点,
+                  🌐 全部节点,
                   ➡️ Direct
               ]
       }
-    - { name: 🌐 指定节点, type: select, include-all: true }
+
+    - { name: 🌐 全部节点, type: select, include-all: true }
     - {
-          name: 6️⃣ IPV6,
-          type: select,
-          proxies:
-              [
-                  ➡️ Direct,
-                  6️⃣ IPV6自选,
-                  6️⃣♻️ IPV6自动,
-                  🇭🇰♻️ 港V6自动,
-                  🇹🇼 ♻️ 台V6自动,
-                  🇯🇵♻️ 日V6自动,
-                  🇺🇲♻️ 美V6自动,
-                  🇸🇬♻️ 新V6自动
-              ]
-      }
-    - { name: ♻️ 自动选择, type: url-test, include-all: true, tolerance: 20, interval: 300, filter: '^((?!(直连)).)*$' }
-    - {
-          name: 🇸🇬♻️ 新加坡自动,
+          name: ♻️ 自动选择,
           type: url-test,
           include-all: true,
-          tolerance: 20,
+          url: 'https://www.gstatic.com/generate_204',
           interval: 300,
-          filter: '(?=.*(新|SG|SGP|(?i)Singapore))^((?!(港|台|日|韩|美|官网|客户端)).)*$'
+          tolerance: 50,
+          lazy: true,
+          filter: '^(?!.*(直连|官网|流量|到期|剩余|重置)).*$'
       }
+
     - {
-          name: 🇭🇰♻️ 香港自动,
+          name: 🇭🇰 自动选择,
           type: url-test,
           include-all: true,
-          tolerance: 20,
+          url: 'https://www.gstatic.com/generate_204',
           interval: 300,
-          filter: '(?=.*(港|HK|(?i)Hong))^((?!(台|日|韩|新|深|美)).)*$'
+          tolerance: 50,
+          lazy: true,
+          filter: '(?i)港|hk|hongkong|hong kong'
       }
     - {
-          name: 🇹🇼 ♻️ 台湾自动,
+          name: 🇹🇼 自动选择,
           type: url-test,
           include-all: true,
-          tolerance: 20,
+          url: 'https://www.gstatic.com/generate_204',
           interval: 300,
-          filter: '(?=.*(台|TW|(?i)Wab))^((?!(港|日|韩|新|深|美)).)*$'
+          tolerance: 50,
+          lazy: true,
+          filter: '(?i)台|tw|taiwan|tai wan'
       }
     - {
-          name: 🇯🇵♻️ 日本自动,
+          name: 🇯🇵 自动选择,
           type: url-test,
           include-all: true,
-          tolerance: 20,
+          url: 'https://www.gstatic.com/generate_204',
           interval: 300,
-          filter: '(?=.*(日|JP|(?i)Japan))^((?!(港|台|韩|新|美)).)*$'
+          tolerance: 50,
+          lazy: true,
+          filter: '(?i)日|jp|japan'
       }
     - {
-          name: 🇺🇲♻️ 美国自动,
+          name: 🇸🇬 自动选择,
           type: url-test,
           include-all: true,
-          tolerance: 20,
+          url: 'https://www.gstatic.com/generate_204',
           interval: 300,
-          filter: '(?=.*(美|US|(?i)States|America))^((?!(港|台|日|韩|新)).)*$'
+          tolerance: 50,
+          lazy: true,
+          filter: '(?i)新|sg|singapore'
       }
+    - {
+          name: 🇺🇸 自动选择,
+          type: url-test,
+          include-all: true,
+          url: 'https://www.gstatic.com/generate_204',
+          interval: 300,
+          tolerance: 50,
+          lazy: true,
+          filter: '(?i)美|us|united states|america'
+      }
+
+    - {
+          name: 🇸🇬 原生自动,
+          type: url-test,
+          include-all: true,
+          url: 'https://www.gstatic.com/generate_204',
+          interval: 300,
+          tolerance: 50,
+          lazy: true,
+          filter: '(?i)(?=.*(新|SG|SGP|Singapore))(?=.*(原生|Native))'
+      }
+    - {
+          name: 🇺🇸 原生自动,
+          type: url-test,
+          include-all: true,
+          url: 'https://www.gstatic.com/generate_204',
+          interval: 300,
+          tolerance: 50,
+          lazy: true,
+          filter: '(?i)(?=.*(美|US|States|America))(?=.*(原生|Native))'
+      }
+
     - { name: 🇭🇰 香港节点, type: select, include-all: true, filter: '(?i)港|hk|hongkong|hong kong' }
-    - { name: 🇹🇼 台湾节点, type: select, include-all: true, filter: '(?i)台|tw|twan|tai wan' }
+    - { name: 🇹🇼 台湾节点, type: select, include-all: true, filter: '(?i)台|tw|taiwan|tai wan' }
     - { name: 🇯🇵 日本节点, type: select, include-all: true, filter: '(?i)日|jp|japan' }
-    - { name: 🇺🇲美国节点, type: select, include-all: true, filter: '(?i)美|us|unitedstates|united states' }
-    - { name: 🇸🇬新加坡节点, type: select, include-all: true, filter: '(?i)新|sg|sgp|singapore' }
-    - { name: 6️⃣ IPV6自选, type: select, include-all: true, filter: '(?i)IPV6|V6|ipv6|v6' }
-    - {
-          name: 6️⃣♻️ IPV6自动,
-          type: url-test,
-          include-all: true,
-          tolerance: 20,
-          interval: 300,
-          filter: '(?i)IPV6|V6|ipv6|v6'
-      }
-    - {
-          name: 🇭🇰♻️ 港V6自动,
-          type: url-test,
-          include-all: true,
-          tolerance: 20,
-          interval: 300,
-          filter: '(?i)(?=.*(IPV6|V6))(?=.*(港|HK|Hong))'
-      }
-    - {
-          name: 🇹🇼 ♻️ 台V6自动,
-          type: url-test,
-          include-all: true,
-          tolerance: 20,
-          interval: 300,
-          filter: '(?i)(?=.*(IPV6|V6))(?=.*(台|TW|Tai))'
-      }
-    - {
-          name: 🇯🇵♻️ 日V6自动,
-          type: url-test,
-          include-all: true,
-          tolerance: 20,
-          interval: 300,
-          filter: '(?i)(?=.*(IPV6|V6))(?=.*(日|JP|Japan))'
-      }
-    - {
-          name: 🇺🇲♻️ 美V6自动,
-          type: url-test,
-          include-all: true,
-          tolerance: 20,
-          interval: 300,
-          filter: '(?i)(?=.*(IPV6|V6))(?=.*(美|US|States|America))'
-      }
-    - {
-          name: 🇸🇬♻️ 新V6自动,
-          type: url-test,
-          include-all: true,
-          tolerance: 20,
-          interval: 300,
-          filter: '(?i)(?=.*(IPV6|V6))(?=.*(新|SG|SGP|Singapore))'
-      }
+    - { name: 🇸🇬 新加坡节点, type: select, include-all: true, filter: '(?i)新|sg|singapore' }
+    - { name: 🇺🇸 美国节点, type: select, include-all: true, filter: '(?i)美|us|united states|america' }
+
+    # === 继承锚点的应用分组 ===
     - { name: 📹 YouTube, !!merge <<: *pr }
     - { name: 🍀 Google, !!merge <<: *pr }
     - { name: 🤖 人工智能, !!merge <<: *pr }
@@ -276,7 +261,25 @@ proxy-groups:
     - { name: 🐬 OneDrive, !!merge <<: *pr }
     - { name: 🪟 Microsoft, !!merge <<: *pr }
     - { name: 🧱 Adobe, !!merge <<: *pr }
-    - { name: 🎵 TikTok, !!merge <<: *pr }
+    - {
+          name: 🎵 TikTok,
+          type: select,
+          proxies:
+              [
+                  🇸🇬 自动选择,
+                  🇯🇵 自动选择,
+                  🇺🇸 自动选择,
+                  🇹🇼 自动选择,
+                  🇸🇬 原生自动,
+                  🇺🇸 原生自动,
+                  🇸🇬 新加坡节点,
+                  🇯🇵 日本节点,
+                  🇺🇸 美国节点,
+                  🇹🇼 台湾节点,
+                  👉 节点选择,
+                  ➡️ Direct
+              ]
+      }
     - { name: 📲 Telegram, !!merge <<: *pr }
     - { name: 🎥 NETFLIX, !!merge <<: *pr }
     - { name: ✈️ Speedtest, !!merge <<: *pr }
@@ -286,25 +289,15 @@ proxy-groups:
     - { name: 🐟 漏网之鱼, !!merge <<: *pr }
 rules:
     - DST-PORT,22,➡️ Direct
-    - DST-PORT,52289,➡️ Direct
-    - DST-PORT,30027,➡️ Direct
     - RULE-SET,private_domain,➡️ Direct
 
     # Steam 下载服务器直连
     - DOMAIN-SUFFIX,steamcontent.com,➡️ Direct
     - DOMAIN-SUFFIX,steamcdn-a.akamaihd.net,➡️ Direct
     - DOMAIN-SUFFIX,cdn.ubi.com,➡️ Direct
-
     - DOMAIN-SUFFIX,visage.surgeplay.com,➡️ Direct
-    - DOMAIN-SUFFIX,vie-panel.anya.im,➡️ Direct
 
-    # MTG
-    - DOMAIN-SUFFIX,www.miaofile.com,➡️ Direct
-    - DOMAIN-SUFFIX,pg0728.anya.im,➡️ Direct
-    - IP-CIDR,168.144.101.14/32,➡️ Direct
-    - IP-CIDR,152.53.64.22/32,➡️ Direct
-
-    #- IP-CIDR6,::/0,6️⃣ IPV6
+    #- IP-CIDR6,::/0
     - RULE-SET,apple_domain,🍎 Apple
     - RULE-SET,ai,🤖 人工智能
     - RULE-SET,github_domain,👨🏿‍💻 GitHub
