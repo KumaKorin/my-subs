@@ -16,9 +16,7 @@ import {
     dbGetLogs,
     dbClearLogs,
     dbGetStats,
-    migrateKvToD1,
-    initD1Tables,
-    dbGetProfiles
+    initD1Tables
 } from './db.js'
 import { assembleFinalYaml, rewriteGithubUrls } from './yaml.js'
 
@@ -667,30 +665,6 @@ export default {
                     }
                     const stats = await dbGetStats(env.DB)
                     return jsonResponse({ success: true, data: { ...stats, hasD1: true } })
-                }
-
-                // API: 执行 KV 到 D1 数据迁移 (/api/migrate-kv-to-d1)
-                if (pathname === '/api/migrate-kv-to-d1' && request.method === 'POST') {
-                    const res = await migrateKvToD1(env)
-                    return jsonResponse(res, res.success ? 200 : 500)
-                }
-
-                // API: 检查迁移状态 (/api/migration-status)
-                if (pathname === '/api/migration-status' && request.method === 'GET') {
-                    if (!env.DB || !env.SUBS_KV) {
-                        return jsonResponse({ success: true, canMigrate: false, reason: 'Missing DB or KV' })
-                    }
-                    const d1Profiles = await dbGetProfiles(env.DB).catch(() => [])
-                    const kvMap = await env.SUBS_KV.get('data:meta:profile:map')
-                    const kvHasData = !!kvMap
-                    const d1IsEmpty = d1Profiles.length === 0
-
-                    return jsonResponse({
-                        success: true,
-                        canMigrate: kvHasData && d1IsEmpty,
-                        d1ProfilesCount: d1Profiles.length,
-                        kvHasData
-                    })
                 }
 
                 return jsonResponse({ success: false, error: 'Not Found' }, 404)

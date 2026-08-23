@@ -1174,45 +1174,177 @@ header {
 }
 
 /* -------------------------------------------------------------
- * 12. 登录界面 (Auth Container)
+ * 12. 登录界面 (Auth Container & Card)
  * ------------------------------------------------------------- */
+.auth-body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.auth-top-bar {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 10;
+}
+
+.auth-theme-btn {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.95rem;
+    border-radius: 999px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
 .auth-container {
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
     padding: 1.5rem;
+    flex: 1;
 }
 
 .auth-card {
     background: var(--card-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border: 1px solid var(--card-border);
-    border-radius: var(--radius-lg);
-    padding: 2.5rem 2.25rem;
+    border-radius: 20px;
+    padding: 2.75rem 2.25rem 2.25rem;
     width: 100%;
-    max-width: 400px;
+    max-width: 420px;
     box-shadow: var(--shadow-card);
     text-align: center;
+    position: relative;
+    transition: all 0.25s ease;
 }
 
-.auth-card h1 {
-    font-size: 1.65rem;
+.auth-brand {
+    margin-bottom: 2rem;
+}
+
+.auth-icon-badge {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 1.25rem;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(59, 130, 246, 0.18));
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    color: #6366f1;
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.22);
+    transition: transform 0.3s ease;
+}
+
+.auth-card:hover .auth-icon-badge {
+    transform: scale(1.06) rotate(4deg);
+}
+
+.auth-brand h1 {
+    font-size: 1.45rem;
     font-weight: 800;
     margin-bottom: 0.4rem;
     background: var(--brand-gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
 }
 
-.auth-card h1 i {
-    -webkit-text-fill-color: initial;
-    color: #6366f1;
-}
-
-.auth-card p {
+.auth-brand p {
     color: var(--text-muted);
-    margin-bottom: 1.75rem;
-    font-size: 0.88rem;
+    font-size: 0.86rem;
+    line-height: 1.4;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.auth-input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.auth-input-icon {
+    position: absolute;
+    left: 1rem;
+    color: var(--text-dim);
+    font-size: 1.15rem;
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+
+.auth-input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text-main);
+    padding: 0.75rem 2.75rem 0.75rem 2.6rem;
+    border-radius: var(--radius);
+    outline: none;
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.auth-input:focus {
+    border-color: var(--primary-light);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.auth-input-group:focus-within .auth-input-icon {
+    color: var(--primary-light);
+}
+
+.auth-pwd-toggle {
+    position: absolute;
+    right: 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0.35rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.auth-pwd-toggle:hover {
+    color: var(--text-main);
+}
+
+.auth-submit-btn {
+    width: 100%;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.95rem;
+    justify-content: center;
+    border-radius: var(--radius);
+}
+
+.auth-footer {
+    margin-top: 1.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--card-border);
+    font-size: 0.76rem;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+
+.auth-footer i {
+    color: var(--success);
+    font-size: 0.9rem;
 }

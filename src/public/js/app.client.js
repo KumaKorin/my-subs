@@ -1,6 +1,5 @@
 import { ProvidersComponent } from './providers.client.js'
 import { EditorView, basicSetup } from 'https://esm.sh/codemirror@6.0.1'
-import { Compartment } from 'https://esm.sh/@codemirror/state@6.4.1'
 import { yaml } from 'https://esm.sh/@codemirror/lang-yaml@6.1.1'
 import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6.1.2'
 import { linter, lintGutter } from 'https://esm.sh/@codemirror/lint@6.8.4'
@@ -25,29 +24,6 @@ let logsCurrentPage = 1
 const logsPageSize = 25
 let logsTotalCount = 0
 let logsTotalPages = 1
-
-const themeCompartment = new Compartment()
-
-function isCurrentLight() {
-    return document.documentElement.getAttribute('data-theme') === 'light'
-}
-
-function getThemeExtension(isLight) {
-    return isLight ? [] : [oneDark]
-}
-
-function updateEditorThemes(isLight) {
-    const ext = getThemeExtension(isLight)
-    if (customYamlEditorView) {
-        try { customYamlEditorView.dispatch({ effects: themeCompartment.reconfigure(ext) }) } catch {}
-    }
-    if (globalYamlEditorView) {
-        try { globalYamlEditorView.dispatch({ effects: themeCompartment.reconfigure(ext) }) } catch {}
-    }
-    if (previewEditorView) {
-        try { previewEditorView.dispatch({ effects: themeCompartment.reconfigure(ext) }) } catch {}
-    }
-}
 
 // 生成 64 字符随机 Hex Token
 function generateRandomHex(byteLength = 32) {
@@ -110,15 +86,9 @@ function createYamlLinter(statusElementId) {
     })
 }
 
-// 创建 CodeMirror 实例 (自适应明亮/暗黑主题)
+// 创建 CodeMirror 实例
 function createEditor(container, doc = '', readOnly = false, linterStatusId = null) {
-    const isLight = isCurrentLight()
-    const extensions = [
-        basicSetup,
-        yaml(),
-        themeCompartment.of(getThemeExtension(isLight)),
-        EditorView.lineWrapping
-    ]
+    const extensions = [basicSetup, yaml(), oneDark, EditorView.lineWrapping]
 
     if (readOnly) {
         extensions.push(EditorView.editable.of(false))
@@ -211,27 +181,12 @@ async function initApp() {
             }
 
             renderAll()
-            checkMigrationStatus()
         } else {
             showToast(`加载数据失败: ${resData.error || '未知错误'}`, true)
         }
     } catch (e) {
         showToast(`网络或数据异常: ${e.message}`, true)
     }
-}
-
-// 检查是否需要迁移提示
-async function checkMigrationStatus() {
-    try {
-        const res = await fetch(apiUrl('/api/migration-status'))
-        const data = await res.json()
-        const banner = document.getElementById('migration-banner')
-        if (banner && data.canMigrate) {
-            banner.style.display = 'flex'
-        } else if (banner) {
-            banner.style.display = 'none'
-        }
-    } catch {}
 }
 
 // 渲染全部界面
@@ -655,7 +610,6 @@ function bindGlobalEvents() {
             document.documentElement.setAttribute('data-theme', now)
             localStorage.setItem('theme', now)
             updateThemeIcon(now)
-            updateEditorThemes(now === 'light')
             showToast(now === 'light' ? '已切换至浅色模式' : '已切换至深色模式')
         })
     }
@@ -1005,34 +959,6 @@ function bindGlobalEvents() {
                 refreshLogsAndStats()
             } else {
                 showToast(data.error || '清空失败', true)
-            }
-        })
-    }
-
-    // 14. 一键迁移至 D1
-    const btnStartMigration = document.getElementById('btn-start-migration')
-    if (btnStartMigration) {
-        btnStartMigration.addEventListener('click', async () => {
-            if (confirm('确定开始将 KV 中的历史配置数据无缝同步至 D1 数据库吗？')) {
-                btnStartMigration.disabled = true
-                btnStartMigration.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> 迁移中...'
-                try {
-                    const res = await fetch(apiUrl('/api/migrate-kv-to-d1'), { method: 'POST' })
-                    const result = await res.json()
-                    if (result.success) {
-                        alert(`迁移完成！\nProviders: ${result.report?.providersCount || 0} 个\nProfiles: ${result.report?.profilesCount || 0} 个\nBase YAML: ${result.report?.baseYamlMigrated ? '已同步' : '默认'}`)
-                        const banner = document.getElementById('migration-banner')
-                        if (banner) banner.style.display = 'none'
-                        initApp()
-                    } else {
-                        showToast(result.error || '迁移失败', true)
-                    }
-                } catch (e) {
-                    showToast(`迁移请求异常: ${e.message}`, true)
-                } finally {
-                    btnStartMigration.disabled = false
-                    btnStartMigration.innerHTML = '<i class="ri-upload-cloud-line"></i> 一键迁移至 D1'
-                }
             }
         })
     }

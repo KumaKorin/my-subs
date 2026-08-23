@@ -17,7 +17,7 @@ function showToast(msg, isError = false) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 主题切换逻辑
+    // 1. 主题切换逻辑
     const btnTheme = document.getElementById('btn-login-theme-toggle')
     const themeIcon = document.getElementById('login-theme-icon')
     function updateLoginThemeIcon(theme) {
@@ -37,12 +37,34 @@ document.addEventListener('DOMContentLoaded', () => {
         })
     }
 
+    // 2. 密码可见性切换
+    const btnTogglePwd = document.getElementById('btn-toggle-pwd')
+    const tokenInput = document.getElementById('admin-token-input')
+    const togglePwdIcon = document.getElementById('toggle-pwd-icon')
+    if (btnTogglePwd && tokenInput) {
+        btnTogglePwd.addEventListener('click', () => {
+            const isPassword = tokenInput.type === 'password'
+            tokenInput.type = isPassword ? 'text' : 'password'
+            if (togglePwdIcon) {
+                togglePwdIcon.className = isPassword ? 'ri-eye-off-line' : 'ri-eye-line'
+            }
+        })
+    }
+
+    // 3. 表单登录提交
     const loginForm = document.getElementById('login-form')
+    const btnSubmit = document.getElementById('btn-submit-login')
+
     if (loginForm) {
         loginForm.addEventListener('submit', async e => {
             e.preventDefault()
-            const token = document.getElementById('admin-token-input').value.trim()
+            const token = tokenInput ? tokenInput.value.trim() : ''
             if (!token) return
+
+            if (btnSubmit) {
+                btnSubmit.disabled = true
+                btnSubmit.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> <span>验证中...</span>'
+            }
 
             try {
                 const res = await fetch(apiUrl('/api/login'), {
@@ -53,15 +75,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const result = await res.json()
                 if (result.success) {
-                    showToast('登录成功，正在跳转...')
+                    showToast('登录成功，正在进入控制台...')
                     setTimeout(() => {
                         window.location.href = `${basePrefix}/control`
-                    }, 500)
+                    }, 400)
                 } else {
-                    showToast(result.error || '登录失败', true)
+                    showToast(result.error || 'Token 验证失败，请检查密码', true)
+                    if (btnSubmit) {
+                        btnSubmit.disabled = false
+                        btnSubmit.innerHTML = '<span>进入管理面板</span> <i class="ri-arrow-right-line"></i>'
+                    }
                 }
             } catch (err) {
-                showToast('网络错误，请稍后重试', true)
+                showToast('网络请求异常，请稍后重试', true)
+                if (btnSubmit) {
+                    btnSubmit.disabled = false
+                    btnSubmit.innerHTML = '<span>进入管理面板</span> <i class="ri-arrow-right-line"></i>'
+                }
             }
         })
     }

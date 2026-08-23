@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>登录 - Clash 订阅分发中心</title>
+        <title>管理员登录 - Clash 订阅分发中心</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
@@ -13,38 +13,64 @@
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" />
         <link rel="stylesheet" href="./public/css/style.css" />
         <script>
-            (function () {
+            ;(function () {
                 const savedTheme = localStorage.getItem('theme') || 'dark'
                 document.documentElement.setAttribute('data-theme', savedTheme)
             })()
         </script>
     </head>
-    <body>
+    <body class="auth-body">
+        <!-- 右上角悬浮主题切换按钮 -->
+        <div class="auth-top-bar">
+            <button
+                id="btn-login-theme-toggle"
+                class="btn btn-secondary auth-theme-btn"
+                title="切换浅色/深色主题"
+            >
+                <i id="login-theme-icon" class="ri-sun-line"></i>
+            </button>
+        </div>
+
         <div class="auth-container">
             <div class="auth-card">
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem">
-                    <button
-                        id="btn-login-theme-toggle"
-                        class="btn btn-secondary"
-                        style="padding: 0.35rem 0.65rem; font-size: 0.85rem"
-                        title="切换明亮/暗黑主题"
-                    >
-                        <i id="login-theme-icon" class="ri-sun-line"></i>
-                    </button>
+                <!-- 头部品牌图标与标题 -->
+                <div class="auth-brand">
+                    <div class="auth-icon-badge">
+                        <i class="ri-flashlight-fill"></i>
+                    </div>
+                    <h1>Clash 订阅分发中心</h1>
+                    <p>请输入管理员 Token 登录管理控制台</p>
                 </div>
-                <h1><i class="ri-flashlight-line"></i> Clash Subs</h1>
-                <p>请输入管理员 Token 登录管理面板</p>
-                <form id="login-form">
-                    <input
-                        type="password"
-                        id="admin-token-input"
-                        class="input-field"
-                        placeholder="ADMIN_TOKEN"
-                        required
-                        autocomplete="current-password"
-                    />
-                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem">登 录</button>
+
+                <!-- 登录表单 -->
+                <form id="login-form" class="auth-form">
+                    <div class="auth-input-group">
+                        <i class="ri-key-2-line auth-input-icon"></i>
+                        <input
+                            type="password"
+                            id="admin-token-input"
+                            class="auth-input"
+                            placeholder="ADMIN_TOKEN 管理口令"
+                            required
+                            autocomplete="current-password"
+                            autofocus
+                        />
+                        <button type="button" id="btn-toggle-pwd" class="auth-pwd-toggle" title="显示/隐藏口令">
+                            <i id="toggle-pwd-icon" class="ri-eye-line"></i>
+                        </button>
+                    </div>
+
+                    <button type="submit" id="btn-submit-login" class="btn btn-primary auth-submit-btn">
+                        <span>进入管理面板</span>
+                        <i class="ri-arrow-right-line"></i>
+                    </button>
                 </form>
+
+                <!-- 底部安全标识 -->
+                <div class="auth-footer">
+                    <i class="ri-shield-check-line"></i>
+                    <span>AES-256-GCM &amp; HMAC 安全鉴权保护</span>
+                </div>
             </div>
         </div>
 
