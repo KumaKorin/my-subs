@@ -1,18 +1,18 @@
 name = "my-subs"
-main = "src/worker.js"
+main = "src/worker.ts"
 compatibility_date = "2024-01-01"
 
 # D1 数据库绑定 (主数据存储与请求日志)
-# 运行 npx wrangler d1 create subs_db 获取 database_id
+# 运行 npx wrangler d1 create subs-db 获取 database_id
 [[d1_databases]]
 binding = "DB"
-database_name = "subs_db"
+database_name = "my_subs"
 database_id = "Id"
 
 # KV 命名空间绑定 (边缘极速缓存层)
 [[kv_namespaces]]
 binding = "SUBS_KV"
-id = "kvID"
+id = "kvId"
 
 # 允许将前端客户端文件与 YAML 默认模板作为 Text 纯文本模块导入
 [[rules]]
@@ -32,3 +32,18 @@ fallthrough = true
 # SECURE_ENTRANCE = "/secret_gate"
 # CDN_HEADER_NAME = "x-cdn-request-host"
 
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1

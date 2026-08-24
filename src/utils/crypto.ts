@@ -2,19 +2,16 @@
  * Web Crypto AES-GCM & SHA-256 Utility Functions
  */
 
-// 将字符串编码为 Uint8Array
-function strToU8(str) {
+function strToU8(str: string): Uint8Array {
     return new TextEncoder().encode(str)
 }
 
-// 将 Uint8Array 解码为字符串
-function u8ToStr(u8) {
+function u8ToStr(u8: Uint8Array): string {
     return new TextDecoder().decode(u8)
 }
 
-// ArrayBuffer 转 Base64
-function bufferToBase64(buffer) {
-    const bytes = new Uint8Array(buffer)
+function bufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
     let binary = ''
     for (let i = 0; i < bytes.byteLength; i++) {
         binary += String.fromCharCode(bytes[i])
@@ -22,8 +19,7 @@ function bufferToBase64(buffer) {
     return btoa(binary)
 }
 
-// Base64 转 Uint8Array
-function base64ToBuffer(base64) {
+function base64ToBuffer(base64: string): Uint8Array {
     const binary = atob(base64)
     const bytes = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i++) {
@@ -32,36 +28,33 @@ function base64ToBuffer(base64) {
     return bytes
 }
 
-// 从 rawSecret (APP_SECRET) 派生 256 位 AES-GCM Key
-async function getAesKey(rawSecret) {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', strToU8(rawSecret))
+async function getAesKey(rawSecret: string): Promise<CryptoKey> {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', strToU8(rawSecret) as unknown as BufferSource)
     return crypto.subtle.importKey('raw', hashBuffer, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
 }
 
 /**
  * AES-GCM 加密
- * @param {string} plainText 明文字符串
- * @param {string} secretKey 密钥字符串 (APP_SECRET)
- * @returns {Promise<string>} 格式为 iv_base64:ciphertext_base64
  */
-export async function encryptAesGcm(plainText, secretKey) {
+export async function encryptAesGcm(plainText: string, secretKey: string): Promise<string> {
     if (typeof plainText !== 'string') {
         plainText = JSON.stringify(plainText)
     }
     const key = await getAesKey(secretKey)
     const iv = crypto.getRandomValues(new Uint8Array(12)) // 96 位 IV
-    const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, strToU8(plainText))
+    const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+        key,
+        strToU8(plainText) as unknown as BufferSource
+    )
 
     return `${bufferToBase64(iv)}:${bufferToBase64(encrypted)}`
 }
 
 /**
  * AES-GCM 解密
- * @param {string} encryptedString 格式为 iv_base64:ciphertext_base64
- * @param {string} secretKey 密钥字符串 (APP_SECRET)
- * @returns {Promise<string>} 解密后的明文字符串
  */
-export async function decryptAesGcm(encryptedString, secretKey) {
+export async function decryptAesGcm(encryptedString: string, secretKey: string): Promise<string> {
     if (!encryptedString || !encryptedString.includes(':')) {
         throw new Error('Invalid encrypted payload format')
     }
@@ -70,7 +63,11 @@ export async function decryptAesGcm(encryptedString, secretKey) {
     const data = base64ToBuffer(dataBase64)
     const key = await getAesKey(secretKey)
 
-    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data)
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+        key,
+        data as unknown as BufferSource
+    )
 
     return u8ToStr(new Uint8Array(decrypted))
 }
@@ -78,19 +75,23 @@ export async function decryptAesGcm(encryptedString, secretKey) {
 /**
  * HMAC-SHA256 签名
  */
-export async function hmacSign(message, secretKey) {
+export async function hmacSign(message: string, secretKey: string): Promise<string> {
     const enc = new TextEncoder()
-    const key = await crypto.subtle.importKey('raw', enc.encode(secretKey), { name: 'HMAC', hash: 'SHA-256' }, false, [
-        'sign'
-    ])
-    const signature = await crypto.subtle.sign('HMAC', key, enc.encode(message))
+    const key = await crypto.subtle.importKey(
+        'raw',
+        enc.encode(secretKey) as unknown as BufferSource,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+    )
+    const signature = await crypto.subtle.sign('HMAC', key, enc.encode(message) as unknown as BufferSource)
     return bufferToBase64(signature)
 }
 
 /**
  * HMAC-SHA256 验证 (常数时间比对)
  */
-export async function hmacVerify(message, signatureBase64, secretKey) {
+export async function hmacVerify(message: string, signatureBase64: string, secretKey: string): Promise<boolean> {
     try {
         const expectedSig = await hmacSign(message, secretKey)
         return timingSafeEqual(expectedSig, signatureBase64)
@@ -100,9 +101,9 @@ export async function hmacVerify(message, signatureBase64, secretKey) {
 }
 
 /**
- * 生成 64 字符的随机 Hex 字符串 (32 字节高熵随机数)
+ * 生成指定字节长度的随机 Hex Token
  */
-export function generateRandomHexToken(byteLength = 32) {
+export function generateRandomHexToken(byteLength = 32): string {
     const bytes = new Uint8Array(byteLength)
     crypto.getRandomValues(bytes)
     return Array.from(bytes)
@@ -113,7 +114,7 @@ export function generateRandomHexToken(byteLength = 32) {
 /**
  * 常数时间字符串比对，防止时序攻击
  */
-export function timingSafeEqual(a, b) {
+export function timingSafeEqual(a: unknown, b: unknown): boolean {
     if (typeof a !== 'string' || typeof b !== 'string') return false
     let diff = a.length ^ b.length
     for (let i = 0; i < Math.max(a.length, b.length); i++) {

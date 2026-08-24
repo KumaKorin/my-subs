@@ -1,7 +1,6 @@
-import { encryptAesGcm, decryptAesGcm, generateRandomHexToken } from './crypto.js'
+import { encryptAesGcm, decryptAesGcm, generateRandomHexToken } from './utils/crypto.js'
 import DEFAULT_TEMPLATE from './default-template.yaml'
 import {
-    initD1Tables,
     dbGetGlobalBaseYaml,
     dbSaveGlobalBaseYaml,
     dbGetProvidersPool,
@@ -11,6 +10,7 @@ import {
     dbGetProfileByToken,
     dbSaveProfiles
 } from './db.js'
+import { Env, Profile, Provider } from './types/index.js'
 
 // KV 缓存 Key 规范
 const KEY_GLOBAL_BASE_YAML = 'data:yaml:global_base'
@@ -23,7 +23,7 @@ const PREFIX_SUBTOKEN_MAP = 'data:map:subtoken:'
 /**
  * 获取全局通用的 Global Base YAML 模板 (D1 主库 + KV 边缘缓存)
  */
-export async function getGlobalBaseYaml(env) {
+export async function getGlobalBaseYaml(env: Env): Promise<string> {
     if (env.SUBS_KV) {
         const cached = await env.SUBS_KV.get(KEY_GLOBAL_BASE_YAML)
         if (cached) return cached
@@ -55,7 +55,7 @@ export async function getGlobalBaseYaml(env) {
 /**
  * 保存全局通用的 Global Base YAML (D1 主库 + 刷新 KV 缓存)
  */
-export async function saveGlobalBaseYaml(yamlString, env) {
+export async function saveGlobalBaseYaml(yamlString: string, env: Env): Promise<void> {
     if (env.DB) {
         await dbSaveGlobalBaseYaml(env.DB, yamlString)
     }
@@ -67,7 +67,7 @@ export async function saveGlobalBaseYaml(yamlString, env) {
 /**
  * 获取单个 Provider (AES 解密)
  */
-export async function getProviderById(id, env) {
+export async function getProviderById(id: string, env: Env): Promise<Provider | null> {
     if (!id) return null
 
     // 1. 优先从 KV 缓存获取
@@ -75,8 +75,8 @@ export async function getProviderById(id, env) {
         const encrypted = await env.SUBS_KV.get(`${PREFIX_PROVIDER_ENCRYPTED}${id}`)
         if (encrypted) {
             try {
-                const decryptedJson = await decryptAesGcm(encrypted, env.APP_SECRET)
-                const provider = JSON.parse(decryptedJson)
+                const decryptedJson = await decryptAesGcm(encrypted, env.APP_SECRET || '')
+                const provider: Provider = JSON.parse(decryptedJson)
                 if (!provider.id) provider.id = id
                 return provider
             } catch (err) {
@@ -87,11 +87,11 @@ export async function getProviderById(id, env) {
 
     // 2. KV 缓存未命中，从 D1 读取并回填缓存
     if (env.DB) {
-        const provider = await dbGetProviderById(env.DB, id, env.APP_SECRET)
+        const provider = await dbGetProviderById(env.DB, id, env.APP_SECRET || '')
         if (provider && env.SUBS_KV) {
             try {
                 const jsonStr = JSON.stringify(provider)
-                const encrypted = await encryptAesGcm(jsonStr, env.APP_SECRET)
+                const encrypted = await encryptAesGcm(jsonStr, env.APP_SECRET || '')
                 await env.SUBS_KV.put(`${PREFIX_PROVIDER_ENCRYPTED}${provider.id}`, encrypted)
             } catch {}
         }
@@ -104,11 +104,11 @@ export async function getProviderById(id, env) {
 /**
  * 加密并保存单个 Provider 到 KV 缓存
  */
-export async function saveProvider(provider, env) {
+export async function saveProvider(provider: Provider, env: Env): Promise<void> {
     if (!provider || !provider.id) return
     if (env.SUBS_KV) {
         const jsonStr = JSON.stringify(provider)
-        const encrypted = await encryptAesGcm(jsonStr, env.APP_SECRET)
+        const encrypted = await encryptAesGcm(jsonStr, env.APP_SECRET || '')
         await env.SUBS_KV.put(`${PREFIX_PROVIDER_ENCRYPTED}${provider.id}`, encrypted)
     }
 }
@@ -116,7 +116,7 @@ export async function saveProvider(provider, env) {
 /**
  * 删除单个 Provider 缓存
  */
-export async function deleteProvider(id, env) {
+export async function deleteProvider(id: string, env: Env): Promise<void> {
     if (!id) return
     if (env.SUBS_KV) {
         await env.SUBS_KV.delete(`${PREFIX_PROVIDER_ENCRYPTED}${id}`)
@@ -126,18 +126,18 @@ export async function deleteProvider(id, env) {
 /**
  * 批量获取指定 IDs 的 Provider 列表
  */
-export async function getProvidersByIds(ids, env) {
+export async function getProvidersByIds(ids: string[], env: Env): Promise<Provider[]> {
     if (!Array.isArray(ids) || ids.length === 0) return []
     const results = await Promise.all(ids.map(id => getProviderById(id, env)))
-    return results.filter(Boolean)
+    return results.filter((p): p is Provider => p !== null)
 }
 
 /**
  * 获取全部 Provider 列表
  */
-export async function getProvidersPool(env) {
+export async function getProvidersPool(env: Env): Promise<Provider[]> {
     if (env.DB) {
-        const list = await dbGetProvidersPool(env.DB, env.APP_SECRET)
+        const list = await dbGetProvidersPool(env.DB, env.APP_SECRET || '')
         if (list && list.length > 0) {
             return list
         }
@@ -163,17 +163,17 @@ export async function getProvidersPool(env) {
 /**
  * 保存全局 Provider 资源池 (D1 主库 + 刷新 KV 缓存)
  */
-export async function saveProvidersPool(providersArray, env) {
+export async function saveProvidersPool(providersArray: Provider[], env: Env): Promise<void> {
     if (!Array.isArray(providersArray)) return
 
     // 1. 写入 D1 主库
     if (env.DB) {
-        await dbSaveProvidersPool(env.DB, providersArray, env.APP_SECRET)
+        await dbSaveProvidersPool(env.DB, providersArray, env.APP_SECRET || '')
     }
 
     // 2. 同步写入/更新 KV 缓存
     if (env.SUBS_KV) {
-        let oldIds = []
+        let oldIds: string[] = []
         const mapRaw = await env.SUBS_KV.get(KEY_PROVIDER_MAP)
         if (mapRaw) {
             try {
@@ -181,8 +181,8 @@ export async function saveProvidersPool(providersArray, env) {
             } catch {}
         }
 
-        const newIds = []
-        const saveTasks = []
+        const newIds: string[] = []
+        const saveTasks: Promise<void>[] = []
 
         for (const p of providersArray) {
             if (!p.id) p.id = crypto.randomUUID()
@@ -205,14 +205,14 @@ export async function saveProvidersPool(providersArray, env) {
 /**
  * 获取单个 Profile (明文 JSON)
  */
-export async function getProfileById(id, env) {
+export async function getProfileById(id: string, env: Env): Promise<Profile | null> {
     if (!id) return null
 
     if (env.SUBS_KV) {
         const raw = await env.SUBS_KV.get(`${PREFIX_PROFILE}${id}`)
         if (raw) {
             try {
-                const profile = JSON.parse(raw)
+                const profile: Profile = JSON.parse(raw)
                 if (!profile.id) profile.id = id
                 return profile
             } catch (err) {}
@@ -234,7 +234,7 @@ export async function getProfileById(id, env) {
 /**
  * 保存单个 Profile 并维护 subtoken 映射
  */
-export async function saveProfile(profile, env, oldToken = null) {
+export async function saveProfile(profile: Profile, env: Env, oldToken: string | null = null): Promise<void> {
     if (!profile || !profile.id) return
     if (env.SUBS_KV) {
         await env.SUBS_KV.put(`${PREFIX_PROFILE}${profile.id}`, JSON.stringify(profile))
@@ -251,7 +251,7 @@ export async function saveProfile(profile, env, oldToken = null) {
 /**
  * 删除单个 Profile 及对应的 subtoken 映射
  */
-export async function deleteProfile(profile, env) {
+export async function deleteProfile(profile: Profile | string, env: Env): Promise<void> {
     if (!profile) return
     const id = typeof profile === 'string' ? profile : profile.id
     const token = typeof profile === 'object' ? profile.token : null
@@ -267,7 +267,7 @@ export async function deleteProfile(profile, env) {
 /**
  * 获取全部 Profile 列表 (未初始化时自动创建默认 Profile)
  */
-export async function getProfiles(env) {
+export async function getProfiles(env: Env): Promise<Profile[]> {
     if (env.DB) {
         const profiles = await dbGetProfiles(env.DB)
         if (profiles && profiles.length > 0) {
@@ -281,8 +281,8 @@ export async function getProfiles(env) {
             try {
                 const ids = JSON.parse(mapRaw)
                 if (Array.isArray(ids) && ids.length > 0) {
-                    const results = await Promise.all(ids.map(id => getProfileById(id, env)))
-                    const validProfiles = results.filter(Boolean)
+                    const results = await Promise.all(ids.map((id: string) => getProfileById(id, env)))
+                    const validProfiles = results.filter((p): p is Profile => p !== null)
                     if (validProfiles.length > 0) {
                         return validProfiles
                     }
@@ -297,7 +297,7 @@ export async function getProfiles(env) {
     const providers = await getProvidersPool(env)
     const token = generateRandomHexToken(32)
 
-    const defaultProfile = {
+    const defaultProfile: Profile = {
         id: crypto.randomUUID(),
         name: '默认配置',
         token,
@@ -319,7 +319,7 @@ export async function getProfiles(env) {
 /**
  * 保存所有 Profile 列表 (D1 主库 + 刷新 KV 缓存)
  */
-export async function saveProfiles(profilesArray, env) {
+export async function saveProfiles(profilesArray: Profile[], env: Env): Promise<void> {
     if (!Array.isArray(profilesArray)) return
 
     // 1. 规范化
@@ -341,19 +341,19 @@ export async function saveProfiles(profilesArray, env) {
 
     // 3. 同步更新 KV 缓存
     if (env.SUBS_KV) {
-        let oldProfiles = []
+        let oldProfiles: Profile[] = []
         try {
             const oldMapRaw = await env.SUBS_KV.get(KEY_PROFILE_MAP)
             if (oldMapRaw) {
                 const oldIds = JSON.parse(oldMapRaw) || []
-                const oldList = await Promise.all(oldIds.map(id => getProfileById(id, env)))
-                oldProfiles = oldList.filter(Boolean)
+                const oldList = await Promise.all(oldIds.map((id: string) => getProfileById(id, env)))
+                oldProfiles = oldList.filter((p): p is Profile => p !== null)
             }
         } catch {}
 
         const oldMap = new Map(oldProfiles.map(p => [p.id, p]))
-        const newIds = []
-        const tasks = []
+        const newIds: string[] = []
+        const tasks: Promise<void>[] = []
 
         for (const p of profilesArray) {
             newIds.push(p.id)
@@ -376,7 +376,7 @@ export async function saveProfiles(profilesArray, env) {
 /**
  * 根据 Token 查找对应的 Profile (O(1) 快速索引，免解密)
  */
-export async function getProfileByToken(token, env) {
+export async function getProfileByToken(token: string, env: Env): Promise<Profile | null> {
     if (!token) return null
 
     // 1. 优先通过 KV subtoken 缓存索引极速查找
@@ -392,7 +392,6 @@ export async function getProfileByToken(token, env) {
     if (env.DB) {
         const profile = await dbGetProfileByToken(env.DB, token)
         if (profile) {
-            // 回填 KV subtoken 索引与 profile 缓存
             if (env.SUBS_KV) {
                 await env.SUBS_KV.put(`${PREFIX_SUBTOKEN_MAP}${token}`, profile.id)
                 await env.SUBS_KV.put(`${PREFIX_PROFILE}${profile.id}`, JSON.stringify(profile))

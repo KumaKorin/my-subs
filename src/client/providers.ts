@@ -1,85 +1,30 @@
 /**
  * Proxy Providers 资源池可视化管理独立组件
  */
-
-function formatBytes(bytes) {
-    if (!bytes || isNaN(bytes) || bytes <= 0) return '0 B'
-    const units = ['B', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(1024))
-    return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`
-}
-
-function formatLocalTime(utcStr) {
-    if (!utcStr) return '-'
-    try {
-        let str = String(utcStr).trim()
-        if (!str.endsWith('Z') && !str.includes('+')) {
-            str = str.replace(' ', 'T') + 'Z'
-        }
-        const date = new Date(str)
-        if (isNaN(date.getTime())) return utcStr
-
-        const pad = n => String(n).padStart(2, '0')
-        const y = date.getFullYear()
-        const m = pad(date.getMonth() + 1)
-        const d = pad(date.getDate())
-        const hh = pad(date.getHours())
-        const mm = pad(date.getMinutes())
-        const ss = pad(date.getSeconds())
-
-        return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
-    } catch {
-        return utcStr
-    }
-}
-
-function parseTrafficInfo(headerStr) {
-    if (!headerStr) return null
-    try {
-        const parts = headerStr.split(';').map(s => s.trim())
-        const info = {}
-        for (const p of parts) {
-            const [k, v] = p.split('=')
-            if (k && v !== undefined) info[k.trim()] = parseInt(v.trim(), 10) || 0
-        }
-        const used = (info.upload || 0) + (info.download || 0)
-        const total = info.total || 0
-        let expireDate = '无限制'
-        if (info.expire && info.expire > 0) {
-            expireDate = new Date(info.expire * 1000).toLocaleDateString()
-        }
-        return {
-            usedStr: formatBytes(used),
-            totalStr: formatBytes(total),
-            percent: total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0,
-            expireDate
-        }
-    } catch {
-        return null
-    }
-}
+import { formatLocalTime, parseTrafficInfo } from './ui.js'
+import { Provider } from '../types/index.js'
 
 export class ProvidersComponent {
-    /**
-     * @param {HTMLElement} container 挂载容器
-     * @param {Function} onChange 数据变化回调
-     */
-    constructor(container, onChange) {
+    private container: HTMLElement
+    private onChange?: (providers: Provider[]) => void
+    private providers: Provider[]
+
+    constructor(container: HTMLElement, onChange?: (providers: Provider[]) => void) {
         this.container = container
         this.onChange = onChange
         this.providers = []
     }
 
-    setProviders(providers) {
+    setProviders(providers: Provider[]): void {
         this.providers = Array.isArray(providers) ? JSON.parse(JSON.stringify(providers)) : []
         this.render()
     }
 
-    getProviders() {
+    getProviders(): Provider[] {
         return this.providers
     }
 
-    addProvider() {
+    addProvider(): void {
         this.providers.push({
             id: crypto.randomUUID
                 ? crypto.randomUUID()
@@ -91,30 +36,38 @@ export class ProvidersComponent {
             healthCheckInterval: 36000,
             proxy: 'DIRECT',
             url: '',
-            useWorkerProxy: false
+            useWorkerProxy: false,
+            useFetchProxy: false,
+            fetchProxyUrl: '',
+            proxyRedirect: true
         })
         this.render()
         if (this.onChange) this.onChange(this.providers)
     }
 
-    removeProvider(index) {
+    removeProvider(index: number): void {
         this.providers.splice(index, 1)
         this.render()
         if (this.onChange) this.onChange(this.providers)
     }
 
-    updateProvider(index, field, value) {
+    updateProvider(index: number, field: keyof Provider, value: any): void {
         if (field === 'interval' || field === 'healthCheckInterval') {
             this.providers[index][field] = parseInt(value, 10) || 36000
-        } else if (field === 'healthCheckEnable' || field === 'useWorkerProxy') {
+        } else if (
+            field === 'healthCheckEnable' ||
+            field === 'useWorkerProxy' ||
+            field === 'useFetchProxy' ||
+            field === 'proxyRedirect'
+        ) {
             this.providers[index][field] = value === 'true' || value === true
         } else {
-            this.providers[index][field] = value
+            ;(this.providers[index] as any)[field] = value
         }
         if (this.onChange) this.onChange(this.providers)
     }
 
-    render() {
+    render(): void {
         if (this.providers.length === 0) {
             this.container.innerHTML = `
                 <div style="text-align:center; padding: 3rem 1rem; color: var(--text-muted);">
@@ -212,6 +165,41 @@ export class ProvidersComponent {
                                 </select>
                             </div>
                         </div>
+
+                        ${p.useWorkerProxy ? `
+                        <div class="provider-proxy-subbox" style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.12); border-radius: 8px; padding: 0.85rem; margin-top: 0.25rem;">
+                            <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.35rem;">
+                                <i class="ri-shield-flash-line" style="color: var(--primary)"></i> Worker 上游高级抓取代理设置
+                            </div>
+                            <div class="provider-row">
+                                <div class="field-group">
+                                    <label>上游 HTTPS / HTTP 代理:</label>
+                                    <select class="input-field provider-use-fetch-proxy">
+                                        <option value="false" ${!p.useFetchProxy ? 'selected' : ''}>禁用代理 (Worker 直连抓取)</option>
+                                        <option value="true" ${p.useFetchProxy ? 'selected' : ''}>启用代理 (经由 HTTPS/HTTP 代理抓取)</option>
+                                    </select>
+                                </div>
+                                <div class="field-group">
+                                    <label>代理 301/302 重定向:</label>
+                                    <select class="input-field provider-proxy-redirect">
+                                        <option value="true" ${p.proxyRedirect !== false ? 'selected' : ''}>开启 (Worker 跟随并代理拉取跳转)</option>
+                                        <option value="false" ${p.proxyRedirect === false ? 'selected' : ''}>关闭 (透传 302 给客户端)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            ${p.useFetchProxy ? `
+                            <div class="provider-row full" style="margin-top: 0.25rem;">
+                                <div class="field-group" style="margin-bottom: 0;">
+                                    <label>代理服务器地址 (HTTPS/HTTP Proxy / 网关):</label>
+                                    <input type="text" class="input-field provider-fetch-proxy-url" value="${p.fetchProxyUrl || ''}" placeholder="例如: https://user:pass@proxy.example.com:8443 或 http://user:pass@1.2.3.4:8080">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem; display: block;">
+                                        <i class="ri-shield-keyhole-line"></i> 支持 <b>HTTPS 代理 (TLS+鉴权)</b> (如 <code>https://user:pass@domain:443</code>)、<b>HTTP 代理</b> (如 <code>http://user:pass@ip:port</code>) 或 Web 代理网关 (带 <code>%s</code>/<code>?url=</code>)。
+                                    </span>
+                                </div>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ` : ''}
                     </div>
                 `
             })
@@ -221,39 +209,53 @@ export class ProvidersComponent {
         this.bindEvents()
     }
 
-    bindEvents() {
+    bindEvents(): void {
         this.container.querySelectorAll('.provider-item').forEach(itemEl => {
-            const idx = parseInt(itemEl.getAttribute('data-index'), 10)
+            const idx = parseInt(itemEl.getAttribute('data-index') || '0', 10)
 
-            itemEl.querySelector('.provider-name').addEventListener('input', e => {
+            itemEl.querySelector('.provider-name')?.addEventListener('input', (e: any) => {
                 this.updateProvider(idx, 'name', e.target.value)
                 const badge = itemEl.querySelector('.provider-badge')
                 if (badge) badge.textContent = e.target.value || `Provider #${idx + 1}`
             })
 
-            itemEl.querySelector('.provider-proxy').addEventListener('input', e => {
+            itemEl.querySelector('.provider-proxy')?.addEventListener('input', (e: any) => {
                 this.updateProvider(idx, 'proxy', e.target.value)
             })
 
-            itemEl.querySelector('.provider-url').addEventListener('input', e => {
+            itemEl.querySelector('.provider-url')?.addEventListener('input', (e: any) => {
                 this.updateProvider(idx, 'url', e.target.value)
             })
 
-            itemEl.querySelector('.provider-interval').addEventListener('input', e => {
+            itemEl.querySelector('.provider-interval')?.addEventListener('input', (e: any) => {
                 this.updateProvider(idx, 'interval', e.target.value)
             })
 
-            itemEl.querySelector('.provider-health-enable').addEventListener('change', e => {
+            itemEl.querySelector('.provider-health-enable')?.addEventListener('change', (e: any) => {
                 this.updateProvider(idx, 'healthCheckEnable', e.target.value)
             })
 
-            itemEl.querySelector('.provider-worker-proxy').addEventListener('change', e => {
+            itemEl.querySelector('.provider-worker-proxy')?.addEventListener('change', (e: any) => {
                 this.updateProvider(idx, 'useWorkerProxy', e.target.value)
+                this.render()
             })
 
-            itemEl.querySelector('.btn-delete-provider').addEventListener('click', () => {
+            itemEl.querySelector('.provider-use-fetch-proxy')?.addEventListener('change', (e: any) => {
+                this.updateProvider(idx, 'useFetchProxy', e.target.value)
+                this.render()
+            })
+
+            itemEl.querySelector('.provider-fetch-proxy-url')?.addEventListener('input', (e: any) => {
+                this.updateProvider(idx, 'fetchProxyUrl', e.target.value)
+            })
+
+            itemEl.querySelector('.provider-proxy-redirect')?.addEventListener('change', (e: any) => {
+                this.updateProvider(idx, 'proxyRedirect', e.target.value)
+            })
+
+            itemEl.querySelector('.btn-delete-provider')?.addEventListener('click', () => {
                 const prov = this.providers[idx]
-                if (confirm(`确定要从资源池中删除订阅源「${prov.name || '未命名'}」吗？`)) {
+                if (confirm(`确定要从资源池中删除订阅源「${prov?.name || '未命名'}」吗？`)) {
                     this.removeProvider(idx)
                 }
             })

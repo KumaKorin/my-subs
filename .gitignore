@@ -1,2 +1,5 @@
 .wrangler
+node_modules
 wrangler.toml.deploy
+
+public/js/*.js
