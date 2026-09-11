@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 216 25% 96%;
+    --foreground: 224 71% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71% 4%;
+    --card-border: 220 14% 88%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+    --primary-hover: 221 83% 53%;
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 9% 44%;
+    --accent: 220 14% 92%;
+    --accent-foreground: 224 71% 4%;
+    --border: 220 14% 88%;
+    --danger: 0 84% 60%;
+    --danger-foreground: 210 40% 98%;
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 98%;
+  }
+
+  [data-theme='dark'],
+  .dark {
+    --background: 225 28% 6%;
+    --foreground: 210 40% 98%;
+    --card: 224 20% 12%;
+    --card-foreground: 210 40% 98%;
+    --card-border: 220 18% 21%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+    --primary-hover: 217 91% 68%;
+    --muted: 223 20% 15%;
+    --muted-foreground: 215 16% 65%;
+    --accent: 223 20% 15%;
+    --accent-foreground: 210 40% 98%;
+    --border: 220 18% 21%;
+    --danger: 0 74% 58%;
+    --danger-foreground: 210 40% 98%;
+    --success: 142 69% 50%;
+    --success-foreground: 210 40% 98%;
+  }
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* CodeMirror 基础定制 */
+.cm-editor {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.85rem !important;
+  height: 100%;
+}
+.cm-editor.cm-focused {
+  outline: none !important;
+}
+.cm-scroller {
+  line-height: 1.6 !important;
+}

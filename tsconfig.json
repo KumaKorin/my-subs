@@ -4,17 +4,22 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["@cloudflare/workers-types"],
     "resolveJsonModule": true,
     "allowJs": false,
-    "checkJs": false,
+    "strict": true,
     "noEmit": true,
     "isolatedModules": true,
-    "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "skipLibCheck": true
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "types": ["@cloudflare/workers-types"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/client/*"],
+      "@server/*": ["src/server/*"]
+    }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/public/js"]
+  "include": [
+    "src"
+  ]
 }

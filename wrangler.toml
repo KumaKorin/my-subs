@@ -1,49 +1,27 @@
-name = "my-subs"
-main = "src/worker.ts"
-compatibility_date = "2024-01-01"
+name = "my-subs-2"
+main = "src/server/index.ts"
+compatibility_date = "2024-09-01"
+
+# 静态前端 SPA 资产托管 (Cloudflare Workers Assets)
+[assets]
+directory = "./dist/client"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
 
 # D1 数据库绑定 (主数据存储与请求日志)
-# 运行 npx wrangler d1 create subs-db 获取 database_id
 [[d1_databases]]
 binding = "DB"
-database_name = "my_subs"
-database_id = "Id"
+database_name = "test_d1_subs"
+database_id = "5780b764-2d82-4890-918c-6b57e419f987"
 
 # KV 命名空间绑定 (边缘极速缓存层)
 [[kv_namespaces]]
 binding = "SUBS_KV"
-id = "kvId"
+id = "42caa645a5744ac392a0529b2ee8b68f"
 
-# 允许将前端客户端文件与 YAML 默认模板作为 Text 纯文本模块导入
-[[rules]]
-type = "Text"
-globs = ["**/*.html", "**/*.css", "**/*.client.js", "**/*.yaml"]
-fallthrough = true
-
-# 环境变量说明：
-# 生产环境推荐：
-#   npx wrangler secret put ADMIN_TOKEN
-#   npx wrangler secret put APP_SECRET
-#   npx wrangler secret put SECURE_ENTRANCE (可选，如 /secret_gate)
-#   npx wrangler secret put CDN_HEADER_NAME (可选，自定义 CDN 域名请求头名称)
 [vars]
-# ADMIN_TOKEN = ""
-# APP_SECRET = ""
-# SECURE_ENTRANCE = "/secret_gate"
+ADMIN_TOKEN = "admin123456"
+APP_SECRET = "a_secure_random_key_for_mysubs_v2_encryption_32"
+SECURE_ENTRANCE = "/secret_gate"
 # CDN_HEADER_NAME = "x-cdn-request-host"
-
-
-[observability]
-enabled = false
-head_sampling_rate = 1
-
-[observability.logs]
-enabled = true
-head_sampling_rate = 1
-persist = true
-invocation_logs = true
-
-[observability.traces]
-enabled = false
-persist = true
-head_sampling_rate = 1
