@@ -3,7 +3,14 @@
  */
 import { Hono } from 'hono'
 import { AppContext } from '../types/env.js'
-import { getProfileByToken, getGlobalBaseYaml, getProvidersByIds, getSystemSettings } from '../services/cache.js'
+import {
+  getProfileByToken,
+  getGlobalBaseYaml,
+  getProvidersByIds,
+  getSystemSettings,
+  getSubCachedYaml,
+  setSubCachedYaml
+} from '../services/cache.js'
 import { assembleFinalYaml } from '../services/yaml.js'
 import { logRequest } from '../db/queries.js'
 import { extractClientInfo } from '../utils/http.js'
@@ -31,6 +38,32 @@ subRoute.get('/', async (c) => {
   }
 
   try {
+    // 1. 优先从 KV 边缘缓存直出已组装的完整 Clash YAML (0 DB 读，0 CPU 消耗)
+    const cachedYaml = await getSubCachedYaml(queryToken, c.env)
+    if (cachedYaml) {
+      const durationMs = Date.now() - reqStartTime
+      c.executionCtx?.waitUntil(
+        logRequest(c.env.DB, {
+          request_type: 'sub',
+          client_ip: clientIp,
+          client_country: clientCountry,
+          user_agent: userAgent,
+          status_code: 200,
+          duration_ms: durationMs,
+          user_info: 'X-Cache: HIT (KV 极速直出)'
+        })
+      )
+      return new Response(cachedYaml, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/yaml; charset=utf-8',
+          'Content-Disposition': `inline; filename="clash.yaml"`,
+          'Profile-Update-Interval': '24',
+          'X-Cache': 'HIT'
+        }
+      })
+    }
+
     const targetProfile = await getProfileByToken(queryToken, c.env)
     if (!targetProfile || targetProfile.isDeleted) {
       c.executionCtx?.waitUntil(
@@ -70,6 +103,9 @@ subRoute.get('/', async (c) => {
       settings,
       profile: targetProfile
     })
+
+    // 写入 KV 边缘极速缓存
+    c.executionCtx?.waitUntil(setSubCachedYaml(queryToken, finalYaml, c.env))
 
     const durationMs = Date.now() - reqStartTime
     c.executionCtx?.waitUntil(

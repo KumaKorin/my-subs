@@ -17,7 +17,7 @@ database_id = "65d93529-bdcd-4e39-bc95-f9677eb379e5"
 
 # KV 命名空间绑定 (边缘极速缓存层)
 [[kv_namespaces]]
-binding = "my_subs"
+binding = "SUBS_KV"
 id = "16108832d2984701ac2cdb257e2ef613"
 
 [vars]

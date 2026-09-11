@@ -10,7 +10,8 @@ import {
   getProfiles,
   getProvidersByIds,
   getSystemSettings,
-  saveSystemSettings
+  saveSystemSettings,
+  warmUpAllToKv
 } from '../../services/cache.js'
 import { assembleFinalYaml } from '../../services/yaml.js'
 import { getPublicOrigin } from '../../utils/http.js'
@@ -29,6 +30,9 @@ configApi.get('/data', async (c) => {
     getSystemSettings(c.env)
   ])
 
+  // 后台自动异步触发 KV 全量热同步，确保 KV 永远填满 D1 最新数据
+  c.executionCtx?.waitUntil(warmUpAllToKv(c.env))
+
   const publicOrigin = getPublicOrigin(c)
   const prefix = c.get('entrancePrefix') || ''
 
@@ -43,6 +47,18 @@ configApi.get('/data', async (c) => {
       prefix,
       hasD1: !!c.env.DB
     }
+  })
+})
+
+/**
+ * 手动强制将 D1 数据全量刷入 KV 边缘缓存
+ */
+configApi.post('/sync-kv', async (c) => {
+  const result = await warmUpAllToKv(c.env)
+  return c.json({
+    success: true,
+    message: '已将 D1 数据库全量数据同步预热至 KV 边缘缓存',
+    data: result
   })
 })
 

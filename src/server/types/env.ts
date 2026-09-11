@@ -5,8 +5,9 @@ export interface Env {
   // Cloudflare D1 关系型数据库绑定
   DB: D1Database
 
-  // Cloudflare KV 边缘缓存命名空间绑定
-  SUBS_KV: KVNamespace
+  // Cloudflare KV 边缘缓存命名空间绑定 (支持 SUBS_KV 与 my_subs 双命名兼容)
+  SUBS_KV?: KVNamespace
+  my_subs?: KVNamespace
 
   // 静态前端资源绑定 (Cloudflare Workers Assets)
   ASSETS?: Fetcher
