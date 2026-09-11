@@ -1,4 +1,4 @@
-name = "my-subs-2"
+name = "my-subs"
 main = "src/server/index.ts"
 compatibility_date = "2024-09-01"
 
@@ -12,16 +12,16 @@ run_worker_first = true
 # D1 数据库绑定 (主数据存储与请求日志)
 [[d1_databases]]
 binding = "DB"
-database_name = "test_d1_subs"
-database_id = "5780b764-2d82-4890-918c-6b57e419f987"
+database_name = "my_subs"
+database_id = "65d93529-bdcd-4e39-bc95-f9677eb379e5"
 
 # KV 命名空间绑定 (边缘极速缓存层)
 [[kv_namespaces]]
-binding = "SUBS_KV"
-id = "42caa645a5744ac392a0529b2ee8b68f"
+binding = "my_subs"
+id = "16108832d2984701ac2cdb257e2ef613"
 
 [vars]
-ADMIN_TOKEN = "admin123456"
-APP_SECRET = "a_secure_random_key_for_mysubs_v2_encryption_32"
-SECURE_ENTRANCE = "/secret_gate"
+# ADMIN_TOKEN = ""
+# APP_SECRET = " "
+SECURE_ENTRANCE = "/KorinSubs"
 # CDN_HEADER_NAME = "x-cdn-request-host"

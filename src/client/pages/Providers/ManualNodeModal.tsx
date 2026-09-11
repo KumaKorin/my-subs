@@ -108,6 +108,35 @@ function configToClashProxy(node: ManualNodeConfig): Record<string, any> {
     if (node.skipCertVerify) p['skip-cert-verify'] = true
   }
 
+  // 链式代理与 Clash / Mihomo 扩展参数
+  if (node.dialerProxy && node.dialerProxy.trim()) {
+    p['dialer-proxy'] = node.dialerProxy.trim()
+  }
+  if (node.interfaceName && node.interfaceName.trim()) {
+    p['interface-name'] = node.interfaceName.trim()
+  }
+  if (node.routingMark !== undefined && node.routingMark !== '') {
+    p['routing-mark'] = Number(node.routingMark) || node.routingMark
+  }
+  if (node.tfo) {
+    p.tfo = true
+  }
+  if (node.mptcp) {
+    p.mptcp = true
+  }
+
+  // 自定义扩展 YAML 参数 (例如 client-fingerprint, smux, packet-encoding 等)
+  if (node.customFieldsYaml && node.customFieldsYaml.trim()) {
+    try {
+      const extraObj = yaml.load(node.customFieldsYaml)
+      if (extraObj && typeof extraObj === 'object' && !Array.isArray(extraObj)) {
+        Object.assign(p, extraObj)
+      }
+    } catch (e) {
+      console.warn('解析自定义节点 YAML 参数失败:', e)
+    }
+  }
+
   return p
 }
 
@@ -128,8 +157,30 @@ export function yamlToNodesList(yamlText: string): ManualNodeConfig[] {
     }
     if (!raw || !Array.isArray(raw.proxies)) return []
 
+    const KNOWN_PROPS = new Set([
+      'name', 'type', 'server', 'port', 'username', 'password', 'tls',
+      'skip-cert-verify', 'udp', 'cipher', 'uuid', 'alterId', 'network',
+      'flow', 'reality-opts', 'sni', 'servername', 'up', 'down',
+      'congestion-controller', 'ws-opts', 'dialer-proxy', 'interface-name',
+      'routing-mark', 'tfo', 'mptcp'
+    ])
+
     return raw.proxies.map((p: any, idx: number) => {
       const type = (p.type || 'socks5').toLowerCase() as ManualNodeProtocol
+
+      const remaining: Record<string, any> = {}
+      for (const [k, v] of Object.entries(p)) {
+        if (!KNOWN_PROPS.has(k)) {
+          remaining[k] = v
+        }
+      }
+      let customFieldsYaml = ''
+      if (Object.keys(remaining).length > 0) {
+        try {
+          customFieldsYaml = yaml.dump(remaining, { indent: 2, lineWidth: -1 }).trim()
+        } catch {}
+      }
+
       return {
         id: crypto.randomUUID(),
         name: p.name || `节点-${idx + 1}`,
@@ -151,7 +202,13 @@ export function yamlToNodesList(yamlText: string): ManualNodeConfig[] {
         up: p.up || '',
         down: p.down || '',
         congestionController: p['congestion-controller'] || '',
-        wsPath: p['ws-opts']?.path || '/'
+        wsPath: p['ws-opts']?.path || '/',
+        dialerProxy: p['dialer-proxy'] || '',
+        interfaceName: p['interface-name'] || '',
+        routingMark: p['routing-mark'] ?? '',
+        tfo: !!p.tfo,
+        mptcp: !!p.mptcp,
+        customFieldsYaml
       }
     })
   } catch {
@@ -255,7 +312,9 @@ export const ManualNodeModal: React.FC<ManualNodeModalProps> = ({
       type: 'socks5',
       server: '',
       port: 1080,
-      udp: true
+      udp: true,
+      dialerProxy: '',
+      customFieldsYaml: ''
     }
     setEditingNode(newNode)
     setSelectedIndex(-1)
@@ -805,6 +864,72 @@ export const ManualNodeModal: React.FC<ManualNodeModalProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* 高级与链式代理扩展配置 (dialer-proxy / 任意 YAML 字段) */}
+            <div className="p-4 rounded-xl bg-muted/20 border border-border flex flex-col gap-3">
+              <span className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Icon name="ri-links-line text-primary" />
+                链式代理与 Clash / Mihomo 扩展参数 (dialer-proxy 等)
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="前置代理 / 链式代理 (dialer-proxy)"
+                  placeholder="如: 节点名 或 策略组名 (流量经由该代理发出)"
+                  value={editingNode.dialerProxy || ''}
+                  onChange={e => setEditingNode(prev => ({ ...prev, dialerProxy: e.target.value }))}
+                />
+                <Input
+                  label="绑定指定网卡 (interface-name，可选)"
+                  placeholder="例如: eth0 或 wlan0"
+                  value={editingNode.interfaceName || ''}
+                  onChange={e => setEditingNode(prev => ({ ...prev, interfaceName: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <Input
+                  label="路由标记 (routing-mark，可选)"
+                  placeholder="例如: 666"
+                  value={editingNode.routingMark !== undefined ? String(editingNode.routingMark) : ''}
+                  onChange={e => setEditingNode(prev => ({ ...prev, routingMark: e.target.value }))}
+                />
+                <div className="flex items-center gap-6 pt-5">
+                  <Switch
+                    checked={!!editingNode.tfo}
+                    onChange={c => setEditingNode(prev => ({ ...prev, tfo: c }))}
+                    label="TCP Fast Open (TFO)"
+                  />
+                  <Switch
+                    checked={!!editingNode.mptcp}
+                    onChange={c => setEditingNode(prev => ({ ...prev, mptcp: c }))}
+                    label="Multipath TCP (MPTCP)"
+                  />
+                </div>
+              </div>
+
+              {/* 自定义附加 YAML 扩展字段 */}
+              <div className="flex flex-col gap-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-foreground flex items-center gap-1">
+                    <Icon name="ri-code-line text-primary" /> 自定义扩展字段 (YAML 格式，任意 Clash / Mihomo 参数)
+                  </label>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    自动合并到节点属性字典中
+                  </span>
+                </div>
+                <textarea
+                  className="w-full h-24 p-2.5 rounded-lg border border-input bg-card text-foreground font-mono text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-y"
+                  placeholder={`# 可直接书写任意扩展字段，保存时自动合并，例如:
+client-fingerprint: chrome
+smux:
+  enabled: true
+packet-encoding: xudp`}
+                  value={editingNode.customFieldsYaml || ''}
+                  onChange={e => setEditingNode(prev => ({ ...prev, customFieldsYaml: e.target.value }))}
+                />
+              </div>
             </div>
           </div>
         </div>

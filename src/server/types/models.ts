@@ -44,6 +44,13 @@ export interface ManualNodeConfig {
   wsPath?: string
   wsHeaders?: Record<string, string>
   grpcServiceName?: string
+  // Clash / Mihomo 高级与链式代理扩展
+  dialerProxy?: string
+  interfaceName?: string
+  routingMark?: number | string
+  tfo?: boolean
+  mptcp?: boolean
+  customFieldsYaml?: string
 }
 
 export interface SystemSettings {

@@ -10,6 +10,7 @@ import { ManualNodeModal, yamlToNodesList } from './ManualNodeModal'
 import { apiRequest } from '../../services/api'
 import { useToast } from '../../components/common/Toast'
 import { useDialog } from '../../context/DialogContext'
+import { parseTrafficInfo, formatRelativeTime } from '../../utils/traffic'
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -54,7 +55,47 @@ export const ProvidersPage: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [activeModalProviderId, setActiveModalProviderId] = useState<string | null>(null)
 
+  const [refreshingIds, setRefreshingIds] = useState<Record<string, boolean>>({})
+
   const activeModalProvider = providers.find(p => p.id === activeModalProviderId) || null
+
+  const handleRefreshTraffic = async (id: string) => {
+    setRefreshingIds(prev => ({ ...prev, [id]: true }))
+    try {
+      const res = await apiRequest<{
+        id: string
+        status: number
+        lastTrafficInfo: string | null
+        lastFetchedAt: string
+      }>(`/api/providers/${id}/refresh-traffic`, { method: 'POST' })
+
+      if (res.success && res.data) {
+        setProvidersPool(
+          providers.map(p =>
+            p.id === id
+              ? {
+                  ...p,
+                  lastStatus: res.data!.status,
+                  lastTrafficInfo: res.data!.lastTrafficInfo,
+                  lastFetchedAt: res.data!.lastFetchedAt
+                }
+              : p
+          )
+        )
+        if (res.data.lastTrafficInfo) {
+          success('已成功获取上游订阅最新流量与状态')
+        } else {
+          success(`已更新状态 (${res.data.status} OK)，但上游机场未下发流量报头`)
+        }
+      } else {
+        error(res.error || '拉取失败')
+      }
+    } catch (err: any) {
+      error(err.message || '网络请求失败')
+    } finally {
+      setRefreshingIds(prev => ({ ...prev, [id]: false }))
+    }
+  }
 
   const handleAddProvider = (providerType: 'external' | 'custom' = 'external') => {
     const newProv: Provider = {
@@ -219,6 +260,32 @@ export const ProvidersPage: React.FC = () => {
                     <span className="text-[11px] font-mono text-muted-foreground" title={p.id}>
                       ID: {p.id.length > 18 ? `${p.id.slice(0, 8)}...${p.id.slice(-4)}` : p.id}
                     </span>
+
+                    {/* 状态与健康指示器 */}
+                    {p.lastStatus ? (
+                      p.lastStatus >= 200 && p.lastStatus < 300 ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                          title={`最近拉取成功: ${formatRelativeTime(p.lastFetchedAt)}`}
+                        >
+                          <Icon name="ri-checkbox-circle-fill text-xs" /> {p.lastStatus} OK
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                          title={`最近拉取失败: ${formatRelativeTime(p.lastFetchedAt)}`}
+                        >
+                          <Icon name="ri-error-warning-fill text-xs" /> {p.lastStatus} Err
+                        </span>
+                      )
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono text-muted-foreground bg-muted/30 border border-border"
+                        title="尚未进行拉取检测"
+                      >
+                        <Icon name="ri-indeterminate-circle-line text-xs" /> 未拉取
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -251,6 +318,83 @@ export const ProvidersPage: React.FC = () => {
                     </Button>
                   </div>
                 </div>
+
+                {/* 流量统计展示大盘 (v1 特性现代升级) */}
+                {(() => {
+                  const traffic = parseTrafficInfo(p.lastTrafficInfo)
+                  if (traffic) {
+                    return (
+                      <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 flex flex-col gap-2 shadow-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Icon name="ri-pie-chart-2-line text-primary text-sm" />
+                            <span className="text-muted-foreground">
+                              已用流量: <b className="text-foreground font-mono">{traffic.usedStr}</b> / <span className="font-mono">{traffic.totalStr}</span>
+                            </span>
+                            <span className="text-emerald-400 font-medium font-mono">
+                              (剩余 {traffic.remainingStr})
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <span className={`flex items-center gap-1 text-xs ${traffic.isExpired ? 'text-rose-400 font-bold' : 'text-muted-foreground'}`}>
+                              <Icon name="ri-calendar-event-line" />
+                              到期: {traffic.expireDate} {traffic.isExpired && '(已过期)'}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={refreshingIds[p.id]}
+                              onClick={() => handleRefreshTraffic(p.id)}
+                              className="px-2 py-0.5 rounded-md text-xs text-primary hover:bg-primary/10 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50 font-medium"
+                              title="点击实时向上游机场刷新流量与状态"
+                            >
+                              <Icon name={refreshingIds[p.id] ? "ri-loader-4-line animate-spin" : "ri-refresh-line"} />
+                              <span>{refreshingIds[p.id] ? '刷新中...' : '刷新流量'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* 进度条 */}
+                        <div className="h-2 rounded-full bg-muted/60 overflow-hidden relative">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              traffic.percent >= 90
+                                ? 'bg-rose-500'
+                                : traffic.percent >= 75
+                                ? 'bg-amber-500'
+                                : 'bg-gradient-to-r from-blue-500 to-primary'
+                            }`}
+                            style={{ width: `${traffic.percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  if (!isCustom) {
+                    return (
+                      <div className="p-3 rounded-lg border border-dashed border-border bg-muted/10 flex items-center justify-between flex-wrap gap-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <Icon name="ri-information-line text-primary" />
+                          {p.lastStatus
+                            ? `上次拉取时间: ${formatRelativeTime(p.lastFetchedAt)} (机场未返回流量报头)`
+                            : '暂未拉取流量信息，可点击右侧按钮向上游检测'}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={refreshingIds[p.id] ? "ri-loader-4-line animate-spin" : "ri-refresh-line"}
+                          onClick={() => handleRefreshTraffic(p.id)}
+                          disabled={refreshingIds[p.id] || !p.url}
+                        >
+                          {refreshingIds[p.id] ? '拉取中...' : '检测并拉取流量'}
+                        </Button>
+                      </div>
+                    )
+                  }
+
+                  return null
+                })()}
 
                 {/* 字段输入 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -343,6 +487,14 @@ export const ProvidersPage: React.FC = () => {
                                     {node.udp && (
                                       <span className="px-1 rounded bg-blue-500/10 text-blue-400 text-[9px] font-sans">
                                         UDP
+                                      </span>
+                                    )}
+                                    {node.dialerProxy && (
+                                      <span
+                                        className="px-1 rounded bg-amber-500/10 text-amber-400 text-[9px] font-sans flex items-center gap-0.5"
+                                        title={`前置代理: ${node.dialerProxy}`}
+                                      >
+                                        <Icon name="ri-links-line text-[9px]" /> {node.dialerProxy}
                                       </span>
                                     )}
                                   </div>

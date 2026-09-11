@@ -433,8 +433,45 @@ export async function logRequest(db: D1Database | undefined, logEntry: PullLog):
       logEntry.error_message || null,
       logEntry.user_info || null
     ).run()
+
+    // 若为针对 Provider 的拉取，同步更新 Provider 的健康状态与流量报头 (与 v1 一致)
+    if (logEntry.target_id && (logEntry.request_type === 'provider' || logEntry.request_type === 'provider-proxy')) {
+      const updates: string[] = ['last_fetched_at = CURRENT_TIMESTAMP', 'last_status = ?']
+      const binds: (string | number)[] = [logEntry.status_code]
+      if (logEntry.user_info) {
+        updates.push('last_traffic_info = ?')
+        binds.push(logEntry.user_info)
+      }
+      binds.push(logEntry.target_id)
+      await db.prepare(`UPDATE providers SET ${updates.join(', ')} WHERE id = ?`).bind(...binds).run()
+    }
   } catch (err) {
     console.error('logRequest error:', err)
+  }
+}
+
+/**
+ * 单独更新 Provider 状态与流量信息
+ */
+export async function dbUpdateProviderTraffic(
+  db: D1Database,
+  id: string,
+  statusCode: number,
+  trafficInfo: string | null
+): Promise<void> {
+  if (!db || !id) return
+  await ensureD1Tables(db)
+  try {
+    const updates = ['last_fetched_at = CURRENT_TIMESTAMP', 'last_status = ?']
+    const binds: (string | number)[] = [statusCode]
+    if (trafficInfo !== undefined && trafficInfo !== null) {
+      updates.push('last_traffic_info = ?')
+      binds.push(trafficInfo)
+    }
+    binds.push(id)
+    await db.prepare(`UPDATE providers SET ${updates.join(', ')} WHERE id = ?`).bind(...binds).run()
+  } catch (err) {
+    console.error('dbUpdateProviderTraffic error:', err)
   }
 }
 
